@@ -197,3 +197,18 @@ print(result.final_answer)        # Verified answer
 2. **Tests don't need LLM**: Unit/integration tests use Z3 directly
 3. **Z3 enum sorts are global**: Use unique names to avoid conflicts in tests
 4. **SMT2 backend needs Z3 CLI**: Ensure `z3` is in PATH or specify `z3_path`
+
+---
+
+## Session Notes
+
+Session notes are stored in `.claude/sessions/` with one file per session.
+
+**Naming convention:** `YYYY-MM-DD-brief-description.md`
+
+**At the start of each session:** Read recent session notes to understand context.
+
+**At the end of each session:** Create a new session file documenting:
+- Summary of work done
+- Files created/modified
+- Pending/future work

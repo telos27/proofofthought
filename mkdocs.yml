@@ -19,12 +19,20 @@ nav:
   - Home: index.md
   - Foreword: foreword.md
   - Installation: installation.md
-  - DSL Specification: dsl-specification.md
-  - API Reference: api-reference.md
-  - Backends: backends.md
-  - Examples: examples.md
-  - Benchmarks: benchmarks.md
-  - Postprocessors: postprocessors.md
+  - User Guide:
+    - CLI: cli.md
+    - Examples: examples.md
+    - Troubleshooting: troubleshooting.md
+  - Core Concepts:
+    - DSL Specification: dsl-specification.md
+    - Backends: backends.md
+    - Postprocessors: postprocessors.md
+  - Advanced:
+    - VerifiedQA: verified-qa.md
+    - Security: security.md
+  - Reference:
+    - API Reference: api-reference.md
+    - Benchmarks: benchmarks.md
 
 markdown_extensions:
   - admonition

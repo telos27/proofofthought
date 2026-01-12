@@ -42,6 +42,21 @@ Implements a multi-stage pipeline for processing the JSON DSL:
 **ProofOfThought** (`z3adapter.reasoning.proof_of_thought`)
 Provides the high-level API with a retry loop (default `max_attempts=3`) and error feedback. Answer determination follows: `SAT only → True`, `UNSAT only → False`, `both/neither → None`.
 
+**Error Feedback Mechanism:**
+When program generation or execution fails, the system uses multi-turn conversation to recover:
+
+```
+Turn 1: User sends prompt with question
+Turn 2: Assistant returns (possibly broken) program
+Turn 3: User sends error trace + "Please fix the [JSON/SMT2] accordingly."
+Turn 4: Assistant returns corrected program
+```
+
+This continues up to `max_attempts`. The error trace includes:
+- JSON/SMT2 parsing errors
+- Z3 execution errors
+- Ambiguous results (both SAT and UNSAT in output)
+
 ## Quick Start
 
 ```python
