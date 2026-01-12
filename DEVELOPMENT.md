@@ -103,12 +103,21 @@ client = OpenAI(
     api_key="ollama"  # Required but not validated
 )
 
-# Use with ProofOfThought
+# Use with ProofOfThought (direct SMT2 generation)
 from z3adapter.reasoning import ProofOfThought
 pot = ProofOfThought(
     llm_client=client,
     model=os.getenv("OLLAMA_MODEL", "llama3")
 )
+
+# Use with VerifiedQA (two-stage: answer then verify)
+from z3adapter.reasoning import VerifiedQA
+vqa = VerifiedQA(
+    llm_client=client,
+    model=os.getenv("OLLAMA_MODEL", "llama3")
+)
+result = vqa.query("If all cats are mammals, is a cat an animal?")
+print(f"LLM said: {result.llm_verdict}, Verified: {result.final_answer}")
 ```
 
 ### Other OpenAI-Compatible APIs

@@ -159,12 +159,32 @@ OLLAMA_MODEL=llama3
 
 ## Architecture Notes
 
-### Data Flow
+### Data Flow (ProofOfThought - Direct Generation)
 1. User provides natural language question
 2. `Z3ProgramGenerator` creates prompt and calls LLM
 3. LLM returns Z3 program (SMT2 or JSON format)
 4. Backend executes program with Z3 solver
 5. Result is parsed and returned to user
+
+### Data Flow (VerifiedQA - Two-Stage Verification)
+1. User provides natural language question
+2. LLM answers naturally with chain-of-thought reasoning
+3. Second LLM call generates SMT2 encoding both question facts AND claimed answer
+4. Z3 checks for contradictions between facts and answer
+5. If contradiction found, answer is flipped; otherwise LLM answer is trusted
+
+```python
+# VerifiedQA usage
+from z3adapter.reasoning import VerifiedQA
+
+vqa = VerifiedQA(llm_client=client, model="qwen2.5-coder:32b")
+result = vqa.query("If all cats are mammals, is a cat an animal?")
+
+print(result.llm_answer)          # Natural language reasoning
+print(result.llm_verdict)         # Extracted True/False
+print(result.contradiction_found) # Did Z3 find contradiction?
+print(result.final_answer)        # Verified answer
+```
 
 ### Error Handling
 - Failed generations trigger retry with error feedback

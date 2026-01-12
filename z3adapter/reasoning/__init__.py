@@ -3,6 +3,7 @@
 from z3adapter.reasoning.evaluation import EvaluationMetrics, EvaluationPipeline, EvaluationResult
 from z3adapter.reasoning.program_generator import GenerationResult, Z3ProgramGenerator
 from z3adapter.reasoning.proof_of_thought import ProofOfThought, QueryResult
+from z3adapter.reasoning.verified_qa import VerifiedQA, VerifiedQAResult
 from z3adapter.reasoning.verifier import VerificationResult, Z3Verifier
 
 __all__ = [
@@ -15,4 +16,6 @@ __all__ = [
     "EvaluationPipeline",
     "EvaluationResult",
     "EvaluationMetrics",
+    "VerifiedQA",
+    "VerifiedQAResult",
 ]
