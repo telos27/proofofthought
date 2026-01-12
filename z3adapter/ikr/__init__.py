@@ -1,17 +1,22 @@
 """Intermediate Knowledge Representation (IKR) for improved SMT generation.
 
 This module provides a structured intermediate representation between
-natural language questions and SMT2 code. The IKR layer:
+natural language questions and formal logic code. The IKR layer:
 
-1. Separates semantic understanding from SMT2 syntax
+1. Separates semantic understanding from target language syntax
 2. Makes implicit world knowledge explicit
-3. Enables deterministic compilation to SMT2
+3. Enables deterministic compilation to SMT2 or Datalog
 4. Supports two-stage prompting for background knowledge
 
-Flow:
+Flow (SMT2):
     NL Question -> LLM -> IKR (Stage 1: explicit facts)
                       -> IKR (Stage 2: background knowledge)
-                      -> Compiler -> SMT2 -> Z3
+                      -> IKRCompiler -> SMT2 -> Z3
+
+Flow (Souffle/Datalog):
+    NL Question -> LLM -> IKR (Stage 1: explicit facts)
+                      -> IKR (Stage 2: background knowledge)
+                      -> IKRSouffleCompiler -> .dl + .facts -> Souffle
 """
 
 from z3adapter.ikr.schema import (
@@ -24,10 +29,13 @@ from z3adapter.ikr.schema import (
     Type,
 )
 from z3adapter.ikr.compiler import IKRCompiler
+from z3adapter.ikr.souffle_compiler import IKRSouffleCompiler, SouffleProgram
 
 __all__ = [
     "IKR",
     "IKRCompiler",
+    "IKRSouffleCompiler",
+    "SouffleProgram",
     "Type",
     "Entity",
     "Relation",

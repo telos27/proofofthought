@@ -1,6 +1,6 @@
 # Backends
 
-ProofOfThought supports three execution backends for Z3: the standard SMT-LIB 2.0 format, a custom JSON DSL, and the Intermediate Knowledge Representation (IKR).
+ProofOfThought supports multiple execution backends: the standard SMT-LIB 2.0 format, a custom JSON DSL, the Intermediate Knowledge Representation (IKR), and Souffle Datalog.
 
 ## SMT2Backend
 
@@ -330,6 +330,134 @@ The IKR prompts guide the LLM to produce valid IKR JSON with:
 
 `.json` (IKR files are JSON, compiled to `.smt2` internally)
 
+## Souffle Backend
+
+The Souffle backend compiles IKR to Datalog and executes via the [Souffle](https://souffle-lang.github.io/) Datalog engine. This provides an alternative execution semantics based on **derivability** rather than **satisfiability**.
+
+**Implementation:** `z3adapter/backends/souffle_backend.py`
+
+### Why Souffle/Datalog?
+
+While SMT2 uses satisfiability checking ("is this query consistent with the knowledge base?"), Datalog uses forward chaining derivation ("can this query be derived from the facts and rules?"). This is often more intuitive for knowledge-graph style reasoning:
+
+| Aspect | SMT2 (Z3) | Datalog (Souffle) |
+|--------|-----------|-------------------|
+| **Semantics** | SAT/UNSAT (consistency) | Derivable/Not derivable |
+| **Query model** | "Is φ consistent with KB?" | "Can φ be derived from KB?" |
+| **Closed-world** | Open-world by default | Closed-world assumption |
+| **Recursion** | Requires careful encoding | Native support |
+| **Performance** | Best for complex constraints | Best for recursive queries |
+
+### Execution Pipeline
+
+```python
+# 1. Load and validate IKR JSON
+ikr = IKR.model_validate(json_data)
+
+# 2. Compile to Souffle Datalog
+compiler = IKRSouffleCompiler()
+souffle_program = compiler.compile(ikr)
+
+# 3. Write .dl program and .facts files
+program_path, facts_dir = compiler.write_program(souffle_program, output_dir)
+
+# 4. Execute via Souffle CLI
+runner = OfficialSouffleRunner()
+result = runner.run(program_path, facts_dir, output_dir)
+
+# 5. Check if query_result relation has any tuples
+answer = len(result.output_tuples["query_result"]) > 0
+```
+
+### IKR to Datalog Compilation
+
+The compiler maps IKR components to Datalog:
+
+| IKR Component | Datalog Equivalent |
+|---------------|-------------------|
+| Types | Type comments (mapped to `symbol`) |
+| Relations | `.decl` statements |
+| Entities | Constants in `.facts` files |
+| Facts | Tab-separated `.facts` files |
+| Rules | Horn clauses (`head :- body.`) |
+| Query | Output relation derivation rule |
+
+**Example IKR rule:**
+```json
+{
+  "antecedent": {"and": [
+    {"predicate": "is_vegetarian", "arguments": ["p"]},
+    {"predicate": "is_plant_based", "arguments": ["f"]}
+  ]},
+  "consequent": {"predicate": "would_eat", "arguments": ["p", "f"]}
+}
+```
+
+**Compiled Datalog:**
+```prolog
+would_eat(p, f) :- is_vegetarian(p), is_plant_based(f).
+```
+
+### Runner Abstraction
+
+The Souffle backend uses a runner abstraction to enable future support for different Datalog engines:
+
+```python
+# Protocol definition
+class SouffleRunner(Protocol):
+    def run(self, program_path: Path, facts_dir: Path, output_dir: Path) -> RunResult: ...
+    def is_available(self) -> bool: ...
+    def get_version(self) -> str | None: ...
+
+# Current implementation
+runner = OfficialSouffleRunner()  # Uses souffle CLI
+
+# Future: mini-souffle support
+# runner = MiniSouffleRunner()  # Uses mini-souffle
+```
+
+**CLI invocation:**
+```bash
+souffle -F facts_dir -D output_dir program.dl
+```
+
+### Usage
+
+```python
+from z3adapter.backends import SouffleBackend
+
+# Initialize (requires Souffle installed)
+backend = SouffleBackend()
+
+# Execute an IKR JSON file
+result = backend.execute("path/to/ikr.json")
+
+print(result.answer)   # True (derivable) or False (not derivable)
+print(result.success)  # True if execution succeeded
+```
+
+### Negation Handling
+
+Souffle uses **stratified negation**. The compiler generates negation-as-failure (`!`) for negated queries:
+
+```prolog
+// Negated query: is the sky NOT blue?
+query_result() :- !is_blue(sky).
+```
+
+Note: Negated base facts require special handling and generate warnings.
+
+### Prerequisites
+
+Install Souffle:
+- **Ubuntu:** `sudo apt-get install souffle`
+- **macOS:** `brew install souffle`
+- **From source:** https://souffle-lang.github.io/install
+
+### File Extension
+
+`.json` (Same IKR input format as IKR/SMT2 backend)
+
 ## Benchmark Performance
 
 Performance comparison across datasets reveals notable differences between the backends.
@@ -413,6 +541,15 @@ else:  # smt2
 ```
 
 **File:** `z3adapter/reasoning/proof_of_thought.py:94-108`
+
+**Note:** The Souffle backend is currently used directly rather than through `ProofOfThought`:
+
+```python
+from z3adapter.backends import SouffleBackend
+
+backend = SouffleBackend()
+result = backend.execute("path/to/ikr.json")
+```
 
 ## Prompt Selection
 

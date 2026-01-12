@@ -179,6 +179,8 @@ class RuleCondition(BaseModel):
     - Disjunction: {"or": [condition1, condition2, ...]}
     """
 
+    model_config = {"populate_by_name": True}
+
     predicate: str | None = Field(default=None, description="Relation name")
     arguments: list[str] = Field(default_factory=list, description="Arguments")
     negated: bool = Field(default=False, description="Negate this condition")

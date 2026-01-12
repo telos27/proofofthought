@@ -15,15 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for symmetric and transitive relation axioms
   - Pydantic validation for schema correctness
   - Graceful degradation: Stage 2 failures return Stage 1 result with empty rules
+- **Souffle Backend**: IKR compilation to Datalog for derivability-based reasoning
+  - Compiles IKR to Souffle Datalog (.dl programs + .facts files)
+  - Alternative semantics: derivability (closed-world) vs satisfiability (open-world)
+  - Runner abstraction for future mini-souffle support
+  - Native support for recursive queries and transitive closure
+  - Stratified negation for negated queries
 - IKR documentation and examples
 - `ikr_two_stage` parameter on `ProofOfThought` and `Z3ProgramGenerator`
 - `GenerationResult` metadata: `two_stage`, `stage1_response`, `stage2_response`
 - Unit tests for two-stage IKR generation
+- Unit tests for Souffle compiler, runner, and backend
 
 ### Changed
 - `ProofOfThought` now accepts `backend="ikr"` option
 - `Z3ProgramGenerator` supports IKR extraction from LLM responses
 - IKR backend uses two-stage prompting by default (set `ikr_two_stage=False` for single-stage)
+- `RuleCondition` model now has `populate_by_name=True` for field alias support
 
 ## [1.0.1] - 2025
 
