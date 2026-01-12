@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "question": "Is the sky blue?",
+    "question_type": "yes_no"
+  },
+  "types": [
+    {"name": "Object", "description": "A physical thing"}
+  ],
+  "entities": [
+    {"name": "sky", "type": "Object"}
+  ],
+  "relations": [
+    {"name": "is_blue", "signature": ["Object"], "range": "Bool"}
+  ],
+  "facts": [
+    {"predicate": "is_blue", "arguments": ["sky"], "source": "explicit"}
+  ],
+  "rules": [],
+  "query": {
+    "predicate": "is_blue",
+    "arguments": ["sky"]
+  }
+}

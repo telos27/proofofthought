@@ -8,10 +8,15 @@ from typing import Any, Literal
 
 from z3adapter.reasoning.prompt_template import build_prompt
 from z3adapter.reasoning.smt2_prompt_template import build_smt2_prompt
+from z3adapter.reasoning.ikr_prompt_template import (
+    build_ikr_stage1_prompt,
+    build_ikr_stage2_prompt,
+    build_ikr_single_stage_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
-BackendType = Literal["json", "smt2"]
+BackendType = Literal["json", "smt2", "ikr"]
 
 
 @dataclass
@@ -36,6 +41,13 @@ class GenerationResult:
     def smt2_program(self) -> str | None:
         """Get SMT2 program text."""
         if self.backend == "smt2" and isinstance(self.program, str):
+            return self.program
+        return None
+
+    @property
+    def ikr_program(self) -> dict[str, Any] | None:
+        """Get IKR program (JSON dict)."""
+        if self.backend == "ikr" and isinstance(self.program, dict):
             return self.program
         return None
 
@@ -77,6 +89,8 @@ class Z3ProgramGenerator:
             # Select prompt based on backend
             if self.backend == "json":
                 prompt = build_prompt(question)
+            elif self.backend == "ikr":
+                prompt = build_ikr_single_stage_prompt(question)
             else:  # smt2
                 prompt = build_smt2_prompt(question)
 
@@ -95,6 +109,9 @@ class Z3ProgramGenerator:
             if self.backend == "json":
                 program: dict[str, Any] | str | None = self._extract_json(raw_response)
                 error_msg = "Failed to extract valid JSON from response"
+            elif self.backend == "ikr":
+                program = self._extract_json(raw_response)  # IKR is also JSON
+                error_msg = "Failed to extract valid IKR JSON from response"
             else:  # smt2
                 program = self._extract_smt2(raw_response)
                 error_msg = "Failed to extract valid SMT2 from response"
@@ -152,6 +169,9 @@ class Z3ProgramGenerator:
             if self.backend == "json":
                 prompt = build_prompt(question)
                 format_msg = "Please fix the JSON accordingly."
+            elif self.backend == "ikr":
+                prompt = build_ikr_single_stage_prompt(question)
+                format_msg = "Please fix the IKR JSON accordingly."
             else:  # smt2
                 prompt = build_smt2_prompt(question)
                 format_msg = "Please fix the SMT2 program accordingly."
@@ -179,6 +199,9 @@ class Z3ProgramGenerator:
             if self.backend == "json":
                 program: dict[str, Any] | str | None = self._extract_json(raw_response)
                 error_msg = "Failed to extract valid JSON from feedback response"
+            elif self.backend == "ikr":
+                program = self._extract_json(raw_response)
+                error_msg = "Failed to extract valid IKR JSON from feedback response"
             else:  # smt2
                 program = self._extract_smt2(raw_response)
                 error_msg = "Failed to extract valid SMT2 from feedback response"

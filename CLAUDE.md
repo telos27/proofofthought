@@ -34,7 +34,8 @@ mypy z3adapter/
 proofofthought/
 ├── z3adapter/                 # Main package (import name)
 │   ├── reasoning/             # High-level API (ProofOfThought, EvaluationPipeline)
-│   ├── backends/              # Execution backends (SMT2, JSON)
+│   ├── backends/              # Execution backends (SMT2, JSON, IKR)
+│   ├── ikr/                   # Intermediate Knowledge Representation
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
 │   ├── dsl/                   # DSL components (sorts, expressions)
 │   ├── solvers/               # Z3 solver wrappers
@@ -67,9 +68,10 @@ from z3adapter.reasoning import ProofOfThought
 from proofofthought import ...
 ```
 
-### Two Backends
+### Three Backends
 1. **SMT2** (default): Standard SMT-LIB 2.0 format, executed via Z3 CLI
 2. **JSON**: Custom DSL interpreted via Python Z3 API
+3. **IKR**: Intermediate Knowledge Representation - structured JSON compiled to SMT2
 
 ### LLM Client Interface
 The project uses OpenAI's API format. Any client with `chat.completions.create()` works:
@@ -93,6 +95,7 @@ The project uses OpenAI's API format. Any client with `chat.completions.create()
 ### Modifying Prompts
 - JSON backend prompts: `z3adapter/reasoning/prompt_template.py`
 - SMT2 backend prompts: `z3adapter/reasoning/smt2_prompt_template.py`
+- IKR backend prompts: `z3adapter/reasoning/ikr_prompt_template.py`
 
 ## Testing Guidelines
 
@@ -186,6 +189,30 @@ print(result.contradiction_found) # Did Z3 find contradiction?
 print(result.final_answer)        # Verified answer
 ```
 
+### Data Flow (IKR Backend - Structured Generation)
+1. User provides natural language question
+2. LLM generates structured IKR JSON (types, entities, relations, facts, rules, query)
+3. IKR is validated with Pydantic schema
+4. `IKRCompiler` deterministically compiles IKR to SMT2 (no syntax errors)
+5. Z3 CLI executes the SMT2 program
+6. Result is parsed and returned to user
+
+```python
+# IKR usage
+from z3adapter.reasoning import ProofOfThought
+
+pot = ProofOfThought(llm_client=client, model="gpt-4o", backend="ikr")
+result = pot.query("Would a vegetarian eat a plant burger?")
+
+print(result.answer)  # True/False/None
+```
+
+IKR benefits:
+- Eliminates SMT2 syntax errors (deterministic compilation)
+- Explicit background knowledge with justifications
+- Debuggable intermediate representation
+- Supports symmetric/transitive relation axioms
+
 ### Error Handling
 - Failed generations trigger retry with error feedback
 - Maximum 3 attempts by default
@@ -197,6 +224,7 @@ print(result.final_answer)        # Verified answer
 2. **Tests don't need LLM**: Unit/integration tests use Z3 directly
 3. **Z3 enum sorts are global**: Use unique names to avoid conflicts in tests
 4. **SMT2 backend needs Z3 CLI**: Ensure `z3` is in PATH or specify `z3_path`
+5. **IKR tests require z3-solver**: The `z3adapter/__init__.py` imports z3, so IKR tests skip if z3 is not installed
 
 ---
 

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026
+
+### Added
+- **IKR Backend**: Intermediate Knowledge Representation for improved SMT generation
+  - Structured schema: types, entities, relations, facts, rules, query
+  - Deterministic compilation to SMT2 (eliminates syntax errors)
+  - Two-stage prompting: explicit facts + background knowledge
+  - Support for symmetric and transitive relation axioms
+  - Pydantic validation for schema correctness
+- IKR documentation and examples
+
+### Changed
+- `ProofOfThought` now accepts `backend="ikr"` option
+- `Z3ProgramGenerator` supports IKR extraction from LLM responses
+
 ## [1.0.1] - 2025
 
 ### Added

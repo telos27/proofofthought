@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "question": "Would a vegetarian eat a burger made of plants?",
+    "question_type": "yes_no"
+  },
+  "types": [
+    {"name": "Person", "description": "A human individual"},
+    {"name": "Food", "description": "An edible item"}
+  ],
+  "entities": [
+    {"name": "vegetarian_person", "type": "Person", "aliases": ["a vegetarian"]},
+    {"name": "plant_burger", "type": "Food", "aliases": ["a burger made of plants"]}
+  ],
+  "relations": [
+    {"name": "is_vegetarian", "signature": ["Person"], "range": "Bool"},
+    {"name": "is_plant_based", "signature": ["Food"], "range": "Bool"},
+    {"name": "would_eat", "signature": ["Person", "Food"], "range": "Bool"},
+    {"name": "avoids_meat", "signature": ["Person"], "range": "Bool"},
+    {"name": "contains_meat", "signature": ["Food"], "range": "Bool"}
+  ],
+  "facts": [
+    {"predicate": "is_vegetarian", "arguments": ["vegetarian_person"], "source": "explicit"},
+    {"predicate": "is_plant_based", "arguments": ["plant_burger"], "source": "explicit"}
+  ],
+  "rules": [
+    {
+      "name": "vegetarians avoid meat",
+      "quantified_vars": [{"name": "p", "type": "Person"}],
+      "antecedent": {"predicate": "is_vegetarian", "arguments": ["p"]},
+      "consequent": {"predicate": "avoids_meat", "arguments": ["p"]},
+      "justification": "By definition, vegetarians do not eat meat"
+    },
+    {
+      "name": "plant-based means no meat",
+      "quantified_vars": [{"name": "f", "type": "Food"}],
+      "antecedent": {"predicate": "is_plant_based", "arguments": ["f"]},
+      "consequent": {"predicate": "contains_meat", "arguments": ["f"], "negated": true},
+      "justification": "Plant-based foods contain no meat by definition"
+    },
+    {
+      "name": "dietary compatibility",
+      "quantified_vars": [
+        {"name": "p", "type": "Person"},
+        {"name": "f", "type": "Food"}
+      ],
+      "antecedent": {
+        "and": [
+          {"predicate": "avoids_meat", "arguments": ["p"]},
+          {"predicate": "contains_meat", "arguments": ["f"], "negated": true}
+        ]
+      },
+      "consequent": {"predicate": "would_eat", "arguments": ["p", "f"]},
+      "justification": "People eat foods compatible with their dietary restrictions"
+    }
+  ],
+  "query": {
+    "predicate": "would_eat",
+    "arguments": ["vegetarian_person", "plant_burger"]
+  }
+}

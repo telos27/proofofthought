@@ -1,6 +1,6 @@
 # Backends
 
-ProofOfThought supports two execution backends for Z3: the standard SMT-LIB 2.0 format and a custom JSON DSL.
+ProofOfThought supports three execution backends for Z3: the standard SMT-LIB 2.0 format, a custom JSON DSL, and the Intermediate Knowledge Representation (IKR).
 
 ## SMT2Backend
 
@@ -175,6 +175,142 @@ The DSL supports three types of verifications:
 
 `.json`
 
+## IKR Backend
+
+The IKR (Intermediate Knowledge Representation) backend introduces a structured intermediate layer between natural language and SMT2. Instead of generating SMT2 directly, the LLM generates a structured JSON representation that is then **deterministically compiled** to SMT2.
+
+**Implementation:** `z3adapter/backends/ikr_backend.py`
+
+### Why IKR?
+
+Direct SMT2 generation requires the LLM to simultaneously handle:
+1. Semantic understanding of the question
+2. Knowledge structuring (types, entities, relations)
+3. SMT2 syntax (parentheses, keywords, order)
+
+This cognitive load leads to syntax errors, especially on complex questions. IKR separates these concerns:
+
+- **LLM task:** Semantic understanding + knowledge structuring (produces IKR JSON)
+- **Compiler task:** Deterministic SMT2 generation (no syntax errors)
+
+### IKR Schema
+
+The IKR schema is defined using Pydantic models in `z3adapter/ikr/schema.py`:
+
+```json
+{
+  "meta": {
+    "question": "Would a vegetarian eat a plant burger?",
+    "question_type": "yes_no"
+  },
+  "types": [
+    {"name": "Person", "description": "A human individual"},
+    {"name": "Food", "description": "An edible item"}
+  ],
+  "entities": [
+    {"name": "vegetarian_person", "type": "Person"},
+    {"name": "plant_burger", "type": "Food"}
+  ],
+  "relations": [
+    {"name": "is_vegetarian", "signature": ["Person"], "range": "Bool"},
+    {"name": "would_eat", "signature": ["Person", "Food"], "range": "Bool"}
+  ],
+  "facts": [
+    {"predicate": "is_vegetarian", "arguments": ["vegetarian_person"], "source": "explicit"}
+  ],
+  "rules": [
+    {
+      "name": "vegetarians avoid meat",
+      "quantified_vars": [{"name": "p", "type": "Person"}],
+      "antecedent": {"predicate": "is_vegetarian", "arguments": ["p"]},
+      "consequent": {"predicate": "avoids_meat", "arguments": ["p"]},
+      "justification": "By definition"
+    }
+  ],
+  "query": {
+    "predicate": "would_eat",
+    "arguments": ["vegetarian_person", "plant_burger"]
+  }
+}
+```
+
+### Schema Components
+
+| Component | Purpose |
+|-----------|---------|
+| `meta` | Question text and type (yes_no, comparison, possibility) |
+| `types` | Domain declarations (Person, Food, Location) |
+| `entities` | Named individuals with their types |
+| `relations` | Predicates and functions with signatures |
+| `facts` | Ground assertions (explicit from question or background knowledge) |
+| `rules` | Universally quantified implications |
+| `query` | The property to check for satisfiability |
+
+### Special Relation Properties
+
+Relations can declare special properties that generate axioms automatically:
+
+**Symmetric relations:**
+```json
+{"name": "knows", "signature": ["Person", "Person"], "range": "Bool", "symmetric": true}
+```
+Generates: `(forall ((x Person) (y Person)) (= (knows x y) (knows y x)))`
+
+**Transitive relations:**
+```json
+{"name": "greater_than", "signature": ["Number", "Number"], "range": "Bool", "transitive": true}
+```
+Generates: `(forall ((x Number) (y Number) (z Number)) (=> (and (greater_than x y) (greater_than y z)) (greater_than x z)))`
+
+### Execution Pipeline
+
+```python
+# 1. Load and validate IKR JSON
+ikr = IKR.model_validate(json_data)
+
+# 2. Compile to SMT2 (deterministic, no syntax errors)
+compiler = IKRCompiler()
+smt2_code = compiler.compile(ikr)
+
+# 3. Execute via Z3 CLI
+result = subprocess.run([z3_path, program_path], ...)
+```
+
+### Two-Stage Prompting
+
+IKR supports two-stage prompting for complex questions:
+
+**Stage 1:** Extract explicit facts from the question
+```python
+prompt = build_ikr_stage1_prompt(question)
+# LLM generates: types, entities, relations, explicit facts, query
+```
+
+**Stage 2:** Generate background knowledge given the explicit IKR
+```python
+prompt = build_ikr_stage2_prompt(current_ikr)
+# LLM adds: background facts, rules with justifications
+```
+
+This approach:
+- Reduces cognitive load per LLM call
+- Makes background knowledge generation more targeted
+- Enables caching of common background knowledge patterns
+
+### Prompt Templates
+
+**Source:** `z3adapter/reasoning/ikr_prompt_template.py`
+
+The IKR prompts guide the LLM to produce valid IKR JSON with:
+- Clear schema specification
+- Worked examples
+- Guidance on fact sources (explicit vs background)
+- Rule structure with justifications
+
+### File Extension
+
+`.json` (IKR files are JSON, compiled to `.smt2` internally)
+
 ## Benchmark Performance
 
 Performance comparison across datasets reveals notable differences between the backends.
@@ -192,6 +328,8 @@ Performance comparison across datasets reveals notable differences between the b
 **Success Rate** represents the percentage of queries that complete without error (including both generation and execution).
 
 Overall, SMT2 achieves higher accuracy on 4 out of 5 datasets, while JSON shows greater success rate variance (86-100% compared to SMT2's 99-100%).
+
+**Note:** IKR backend benchmarks are pending. The IKR backend is expected to improve accuracy on StrategyQA (commonsense reasoning) by making background knowledge explicit.
 
 ## Implementation Differences
 
@@ -247,12 +385,15 @@ The system selects backends at runtime based on configuration:
 if backend == "json":
     from z3adapter.backends.json_backend import JSONBackend
     backend_instance = JSONBackend(verify_timeout, optimize_timeout)
+elif backend == "ikr":
+    from z3adapter.backends.ikr_backend import IKRBackend
+    backend_instance = IKRBackend(verify_timeout, z3_path)
 else:  # smt2
     from z3adapter.backends.smt2_backend import SMT2Backend
     backend_instance = SMT2Backend(verify_timeout, z3_path)
 ```
 
-**File:** `z3adapter/reasoning/proof_of_thought.py:78-90`
+**File:** `z3adapter/reasoning/proof_of_thought.py:94-108`
 
 ## Prompt Selection
 
@@ -261,10 +402,15 @@ The appropriate prompt template is chosen based on the selected backend:
 ```python
 if self.backend == "json":
     prompt = build_prompt(question)
+elif self.backend == "ikr":
+    prompt = build_ikr_single_stage_prompt(question)
 else:  # smt2
     prompt = build_smt2_prompt(question)
 ```
 
-**File:** `z3adapter/reasoning/program_generator.py:78-81`
+**File:** `z3adapter/reasoning/program_generator.py:89-95`
 
-Both prompts include few-shot examples and format specifications. The SMT2 prompt emphasizes S-expression syntax, while the JSON prompt provides detailed guidance on variable scoping and quantifier semantics.
+All prompts include few-shot examples and format specifications:
+- **SMT2:** Emphasizes S-expression syntax
+- **JSON:** Detailed guidance on variable scoping and quantifier semantics
+- **IKR:** Structured schema with explicit/background knowledge separation
