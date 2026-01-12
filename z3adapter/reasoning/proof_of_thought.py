@@ -65,13 +65,14 @@ class ProofOfThought:
         z3_path: str = "z3",
         postprocessors: Sequence[str | Postprocessor] | None = None,
         postprocessor_configs: dict[str, dict] | None = None,
+        ikr_two_stage: bool = True,
     ) -> None:
         """Initialize ProofOfThought.
 
         Args:
             llm_client: LLM client (OpenAI, AzureOpenAI, Anthropic, etc.)
             model: LLM model/deployment name (default: "gpt-5")
-            backend: Execution backend ("json" or "smt2", default: "smt2")
+            backend: Execution backend ("json", "smt2", or "ikr", default: "smt2")
             max_attempts: Maximum retry attempts for program generation
             verify_timeout: Z3 verification timeout in milliseconds
             optimize_timeout: Z3 optimization timeout in milliseconds
@@ -79,6 +80,8 @@ class ProofOfThought:
             z3_path: Path to Z3 executable (for SMT2 backend)
             postprocessors: List of postprocessor names or instances to apply
             postprocessor_configs: Configuration for postprocessors (if names provided)
+            ikr_two_stage: For IKR backend, use two-stage prompting (default True).
+                Stage 1 extracts explicit knowledge, Stage 2 generates background knowledge.
 
         Example with postprocessors:
             >>> pot = ProofOfThought(
@@ -86,10 +89,19 @@ class ProofOfThought:
             ...     postprocessors=["self_refine", "self_consistency"],
             ...     postprocessor_configs={"self_refine": {"num_iterations": 3}}
             ... )
+
+        Example with IKR two-stage:
+            >>> pot = ProofOfThought(
+            ...     llm_client=client,
+            ...     backend="ikr",
+            ...     ikr_two_stage=True  # default
+            ... )
         """
         self.backend_type = backend
         self.llm_client = llm_client
-        self.generator = Z3ProgramGenerator(llm_client=llm_client, model=model, backend=backend)
+        self.generator = Z3ProgramGenerator(
+            llm_client=llm_client, model=model, backend=backend, ikr_two_stage=ikr_two_stage
+        )
 
         # Initialize appropriate backend (import here to avoid circular imports)
         if backend == "json":

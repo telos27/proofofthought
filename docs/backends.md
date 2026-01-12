@@ -276,11 +276,11 @@ smt2_code = compiler.compile(ikr)
 result = subprocess.run([z3_path, program_path], ...)
 ```
 
-### Two-Stage Prompting
+### Two-Stage Prompting (Default)
 
-IKR supports two-stage prompting for complex questions:
+IKR uses two-stage prompting by default for improved accuracy:
 
-**Stage 1:** Extract explicit facts from the question
+**Stage 1:** Extract explicit knowledge from the question
 ```python
 prompt = build_ikr_stage1_prompt(question)
 # LLM generates: types, entities, relations, explicit facts, query
@@ -288,14 +288,33 @@ prompt = build_ikr_stage1_prompt(question)
 
 **Stage 2:** Generate background knowledge given the explicit IKR
 ```python
-prompt = build_ikr_stage2_prompt(current_ikr)
+prompt = build_ikr_stage2_prompt(current_ikr_json)
 # LLM adds: background facts, rules with justifications
 ```
 
-This approach:
+The two stages are then merged into a complete IKR.
+
+**Benefits:**
 - Reduces cognitive load per LLM call
 - Makes background knowledge generation more targeted
-- Enables caching of common background knowledge patterns
+- Enables debugging of each stage independently
+- Stage 2 failures gracefully degrade (returns Stage 1 result with empty rules)
+
+**Configuration:**
+```python
+# Two-stage (default)
+pot = ProofOfThought(llm_client=client, backend="ikr", ikr_two_stage=True)
+
+# Single-stage (for simpler questions or fewer API calls)
+pot = ProofOfThought(llm_client=client, backend="ikr", ikr_two_stage=False)
+```
+
+The `GenerationResult` includes metadata about the two-stage process:
+```python
+result.two_stage        # True if two-stage was used
+result.stage1_response  # Raw LLM response from Stage 1
+result.stage2_response  # Raw LLM response from Stage 2
+```
 
 ### Prompt Templates
 
@@ -400,6 +419,11 @@ else:  # smt2
 The appropriate prompt template is chosen based on the selected backend:
 
 ```python
+# IKR routes to two-stage by default
+if self.backend == "ikr" and self.ikr_two_stage:
+    return self._generate_ikr_two_stage(question, max_tokens)
+
+# Single-stage prompting for JSON, SMT2, or IKR with ikr_two_stage=False
 if self.backend == "json":
     prompt = build_prompt(question)
 elif self.backend == "ikr":
@@ -408,7 +432,7 @@ else:  # smt2
     prompt = build_smt2_prompt(question)
 ```
 
-**File:** `z3adapter/reasoning/program_generator.py:89-95`
+**File:** `z3adapter/reasoning/program_generator.py:108-119`
 
 All prompts include few-shot examples and format specifications:
 - **SMT2:** Emphasizes S-expression syntax

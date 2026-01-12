@@ -11,14 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **IKR Backend**: Intermediate Knowledge Representation for improved SMT generation
   - Structured schema: types, entities, relations, facts, rules, query
   - Deterministic compilation to SMT2 (eliminates syntax errors)
-  - Two-stage prompting: explicit facts + background knowledge
+  - Two-stage prompting (default): Stage 1 extracts explicit facts, Stage 2 generates background knowledge
   - Support for symmetric and transitive relation axioms
   - Pydantic validation for schema correctness
+  - Graceful degradation: Stage 2 failures return Stage 1 result with empty rules
 - IKR documentation and examples
+- `ikr_two_stage` parameter on `ProofOfThought` and `Z3ProgramGenerator`
+- `GenerationResult` metadata: `two_stage`, `stage1_response`, `stage2_response`
+- Unit tests for two-stage IKR generation
 
 ### Changed
 - `ProofOfThought` now accepts `backend="ikr"` option
 - `Z3ProgramGenerator` supports IKR extraction from LLM responses
+- IKR backend uses two-stage prompting by default (set `ikr_two_stage=False` for single-stage)
 
 ## [1.0.1] - 2025
 
