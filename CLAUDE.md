@@ -42,7 +42,7 @@ proofofthought/
 │   │   │   ├── fact_store.py  # Indexed fact storage
 │   │   │   ├── rule.py        # Rule compilation
 │   │   │   └── kb_loader.py   # KB module loader
-│   │   ├── triples/           # Triple extraction pipeline (planned)
+│   │   ├── triples/           # Triple extraction pipeline
 │   │   ├── fuzzy_nars.py      # Fuzzy-NARS verification
 │   │   └── schema.py          # IKR Pydantic schema
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
@@ -320,35 +320,65 @@ NARS-Datalog benefits:
 - **Pluggable truth strategies**: Choose from `current`, `opennars`, `floor`, or `evidence` to control confidence degradation
 - **Epistemic logic (MVP)**: Facts can have `epistemic_context` (agent beliefs), queryable via `agent` parameter
 
-### Triple Extraction Pipeline (Planned)
+### Triple Extraction Pipeline
 
 A text-to-triples extraction pipeline for knowledge extraction from books and documents. Design follows Wikidata's philosophy: **predicates are fixed schema, entities emerge from content**.
 
 **7 Generic Predicates:**
 ```python
-PREDICATES = [
-    "is_a",        # Taxonomy: X is a type of Y
-    "part_of",     # Structure: X is part of Y
-    "has",         # Attributes: X has property Y
-    "causes",      # Causation: X causes Y
-    "prevents",    # Negative causation: X prevents Y
-    "believes",    # Epistemic: X believes Y
-    "related_to",  # Catch-all: X relates to Y
-]
+from z3adapter.ikr.triples import Predicate
+
+# Available predicates
+Predicate.IS_A        # Taxonomy: X is a type of Y
+Predicate.PART_OF     # Structure: X is part of Y
+Predicate.HAS         # Attributes: X has property Y
+Predicate.CAUSES      # Causation: X causes Y
+Predicate.PREVENTS    # Negative causation: X prevents Y
+Predicate.BELIEVES    # Epistemic: X believes Y
+Predicate.RELATED_TO  # Catch-all: X relates to Y
 ```
 
-**Triple Structure:**
+**Usage Example:**
 ```python
-@dataclass
-class Triple:
-    id: str                    # Unique ID ("t1", "t2", ...)
-    subject: str               # Entity or triple reference ("t:t1")
-    predicate: str             # One of 7 predicates
-    object: str                # Entity or triple reference
-    negated: bool = False      # "X does NOT predicate Y"
-    truth: TruthValue | None   # NARS uncertainty
-    source: str | None         # Provenance ("Zimbardo 2017 p.42")
-    surface_form: str | None   # Original text
+from openai import OpenAI
+from z3adapter.ikr.triples import Triple, TripleStore, Predicate, TripleExtractor
+
+# Extract triples from text
+client = OpenAI()
+extractor = TripleExtractor(client, model="gpt-4o")
+result = extractor.extract(
+    "Chronic stress causes elevated cortisol levels, which impairs memory.",
+    source="Psychology 101"
+)
+
+# Store and query triples
+store = TripleStore()
+for triple in result.triples:
+    store.add(triple)
+
+# Query by predicate
+causal = store.query(predicate=Predicate.CAUSES)
+for t in causal:
+    print(f"{t.subject} causes {t.object}")
+
+# Handle nested beliefs (reification)
+belief_triple = Triple(
+    id="t1",
+    subject="stress",
+    predicate=Predicate.CAUSES,
+    object="anxiety"
+)
+meta_triple = Triple(
+    id="t2",
+    subject="dr_smith",
+    predicate=Predicate.BELIEVES,
+    object="t:t1"  # Reference to t1
+)
+store.add(belief_triple)
+store.add(meta_triple)
+
+# Resolve triple references
+resolved = store.resolve("t:t1")  # Returns the Triple object
 ```
 
 **Key Design Decisions:**
@@ -357,15 +387,16 @@ class Triple:
 - **Entity resolution**: Fuzzy matching is the core challenge (not predicate classification)
 - **NARS truth values**: Uncertainty propagation throughout
 
-**Planned File Structure:**
+**File Structure:**
 ```
 z3adapter/ikr/triples/
-├── schema.py           # Triple, TripleStore, Predicate
-├── extractor.py        # LLM-based triple extraction
-├── entity_resolver.py  # Fuzzy entity matching
-├── verification.py     # Fuzzy-NARS bridge
-├── storage.py          # SQLite persistence
-└── pipeline.py         # End-to-end extraction pipeline
+├── __init__.py         # Package exports
+├── schema.py           # Triple, TripleStore, Predicate (implemented)
+├── extractor.py        # LLM-based triple extraction (implemented)
+├── entity_resolver.py  # Fuzzy entity matching (planned)
+├── verification.py     # Fuzzy-NARS bridge (planned)
+├── storage.py          # SQLite persistence (planned)
+└── pipeline.py         # End-to-end extraction pipeline (planned)
 ```
 
 See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for full implementation plan.
