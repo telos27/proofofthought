@@ -330,6 +330,162 @@ The IKR prompts guide the LLM to produce valid IKR JSON with:
 
 `.json` (IKR files are JSON, compiled to `.smt2` internally)
 
+### Extended IKR Features
+
+IKR supports advanced features for real-world/commonsense reasoning.
+
+#### Uncertainty (NARS-style Truth Values)
+
+Facts can have explicit uncertainty using NARS (Non-Axiomatic Reasoning System) semantics:
+
+```json
+{
+  "facts": [
+    {
+      "predicate": "can_fly",
+      "arguments": ["tweety"],
+      "truth_value": {"frequency": 0.95, "confidence": 0.8},
+      "justification": "Most birds can fly"
+    }
+  ]
+}
+```
+
+**Truth value components:**
+- `frequency` (f): [0.0, 1.0] - proportion of positive evidence
+- `confidence` (c): (0.0, 1.0) - strength of evidence
+
+**Handling contradictions:**
+
+When facts conflict, the NARS revision function combines evidence:
+
+```python
+from z3adapter.ikr.uncertainty import revise_conflicting_facts
+
+# Two conflicting facts about tweety
+facts = [
+    Fact(predicate='can_fly', arguments=['tweety'],
+         truth_value=TruthValue(frequency=0.95, confidence=0.8)),
+    Fact(predicate='can_fly', arguments=['tweety'], negated=True,
+         truth_value=TruthValue(frequency=0.9, confidence=0.95)),
+]
+
+# Revision combines evidence
+revised = revise_conflicting_facts(facts)
+# Result: can_fly(tweety) -> f=0.25, c=0.99 (negated due to stronger counter-evidence)
+```
+
+**Compilation:** Uncertain facts compile to Z3 soft constraints with weights:
+```smt2
+(assert-soft (can_fly tweety) :weight 760)  ; weight = f * c * 1000
+```
+
+#### Epistemic Contexts (Beliefs and Knowledge)
+
+Facts can be attributed to specific agents' belief states:
+
+```json
+{
+  "epistemic_config": {
+    "agents": ["alice", "bob"],
+    "axiom_system": "KD45"
+  },
+  "facts": [
+    {
+      "predicate": "raining",
+      "arguments": [],
+      "epistemic_context": {"agent": "alice", "modality": "believes"}
+    },
+    {
+      "predicate": "raining",
+      "arguments": [],
+      "negated": true,
+      "epistemic_context": {"agent": "bob", "modality": "believes"}
+    }
+  ]
+}
+```
+
+This enables modeling scenarios where different agents have different (even contradictory) beliefs.
+
+**Supported axiom systems:**
+| System | Properties | Use Case |
+|--------|-----------|----------|
+| K | Basic modal logic | Minimal constraints |
+| KD45 | Serial, transitive, euclidean | Belief logic (default) |
+| S5 | Equivalence relation | Knowledge logic |
+
+**Nested beliefs:** "Alice believes Bob believes X"
+```json
+{
+  "epistemic_context": {
+    "agent": "bob",
+    "modality": "believes",
+    "nested_in": {"agent": "alice", "modality": "believes"}
+  }
+}
+```
+
+**Compilation:** Epistemic facts compile to possible-worlds semantics:
+```smt2
+(declare-sort World 0)
+(declare-const actual_world World)
+(declare-fun R_alice (World World) Bool)
+
+; Alice believes raining: ∀w. R_alice(actual, w) → raining
+(assert (forall ((w World)) (=> (R_alice actual_world w) raining)))
+```
+
+#### Knowledge Base Modules
+
+IKR supports modular commonsense knowledge bases that can be loaded and merged:
+
+```python
+from z3adapter.ikr.knowledge_base import KnowledgeBase
+
+# List available modules
+KnowledgeBase.available_modules()  # ['food', 'social']
+
+# Load a module
+food_kb = KnowledgeBase.load_module('food')
+print(f"Rules: {len(food_kb['rules'])}")  # 9 rules about dietary restrictions
+
+# Merge into IKR
+merged = KnowledgeBase.merge_into_ikr(ikr_data, ['food', 'social'])
+```
+
+**Or specify in IKR directly:**
+```json
+{
+  "kb_modules": ["food"],
+  "facts": [
+    {"predicate": "is_vegetarian", "arguments": ["alice"], "source": "explicit"}
+  ],
+  "query": {"predicate": "would_eat", "arguments": ["alice", "plant_burger"]}
+}
+```
+
+**Available KB modules:**
+| Module | Content |
+|--------|---------|
+| `food` | Dietary restrictions, food properties (9 rules) |
+| `social` | Relationships, trust, family (11 rules) |
+
+**Precedence:** User facts > Background facts > KB facts
+
+**Creating custom KB modules:**
+Add JSON files to `z3adapter/ikr/kb/`:
+```json
+{
+  "name": "physics",
+  "version": "1.0",
+  "description": "Physical properties and spatial relations",
+  "types": [...],
+  "relations": [...],
+  "rules": [...]
+}
+```
+
 ## Souffle Backend
 
 The Souffle backend compiles IKR to Datalog and executes via the [Souffle](https://souffle-lang.github.io/) Datalog engine. This provides an alternative execution semantics based on **derivability** rather than **satisfiability**.

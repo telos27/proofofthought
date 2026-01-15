@@ -213,6 +213,31 @@ IKR benefits:
 - Debuggable intermediate representation
 - Supports symmetric/transitive relation axioms
 
+IKR extended features (for commonsense reasoning):
+- **Uncertainty**: NARS-style truth values with frequency/confidence
+- **Epistemic contexts**: "A believes B believes C" with possible worlds
+- **Knowledge base modules**: Reusable commonsense rules (`food`, `social`)
+
+```python
+# IKR with uncertainty
+from z3adapter.ikr.schema import Fact, TruthValue
+fact = Fact(
+    predicate='can_fly', arguments=['tweety'],
+    truth_value=TruthValue(frequency=0.8, confidence=0.9)
+)
+
+# IKR with epistemic context
+from z3adapter.ikr.schema import EpistemicContext, EpistemicOperator
+fact = Fact(
+    predicate='raining', arguments=[],
+    epistemic_context=EpistemicContext(agent='alice', modality=EpistemicOperator.BELIEVES)
+)
+
+# Knowledge base modules
+from z3adapter.ikr.knowledge_base import KnowledgeBase
+merged = KnowledgeBase.merge_into_ikr(ikr_data, ['food', 'social'])
+```
+
 ### Error Handling
 - Failed generations trigger retry with error feedback
 - Maximum 3 attempts by default
