@@ -379,13 +379,39 @@ store.add(meta_triple)
 
 # Resolve triple references
 resolved = store.resolve("t:t1")  # Returns the Triple object
+
+# Entity resolution (fuzzy matching)
+from z3adapter.ikr.triples import EntityResolver
+
+resolver = EntityResolver(threshold=0.8)
+resolver.add_entity("working_memory", ["WM", "short-term memory"])
+match = resolver.resolve("short term memory")
+print(match.canonical)  # "working_memory"
+
+# Verification against TripleStore
+from z3adapter.ikr.triples import verify_triple_against_store
+from z3adapter.ikr.fuzzy_nars import VerificationVerdict
+
+store = TripleStore()
+store.add(Triple(id="t1", subject="stress", predicate=Predicate.CAUSES, object="anxiety"))
+
+query = Triple(id="q1", subject="stress", predicate=Predicate.CAUSES, object="worry")
+result = verify_triple_against_store(query, store)
+print(result.verdict)  # VerificationVerdict.SUPPORTED (fuzzy match)
+
+# Contradiction detection via predicate polarity
+store.add(Triple(id="t2", subject="exercise", predicate=Predicate.PREVENTS, object="anxiety"))
+query2 = Triple(id="q2", subject="exercise", predicate=Predicate.CAUSES, object="anxiety")
+result2 = verify_triple_against_store(query2, store)
+print(result2.verdict)  # VerificationVerdict.CONTRADICTED
 ```
 
 **Key Design Decisions:**
 - **No domain-specific KB**: Vocabulary emerges from text + LLM common sense
 - **Triple references**: `t:` prefix enables multi-level beliefs (reification)
-- **Entity resolution**: Fuzzy matching is the core challenge (not predicate classification)
+- **Entity resolution**: Fuzzy matching with surface form learning
 - **NARS truth values**: Uncertainty propagation throughout
+- **Predicate polarity**: causes ↔ prevents for contradiction detection
 
 **File Structure:**
 ```
@@ -393,8 +419,8 @@ z3adapter/ikr/triples/
 ├── __init__.py         # Package exports
 ├── schema.py           # Triple, TripleStore, Predicate (implemented)
 ├── extractor.py        # LLM-based triple extraction (implemented)
-├── entity_resolver.py  # Fuzzy entity matching (planned)
-├── verification.py     # Fuzzy-NARS bridge (planned)
+├── entity_resolver.py  # Fuzzy entity matching (implemented)
+├── verification.py     # Fuzzy-NARS bridge (implemented)
 ├── storage.py          # SQLite persistence (planned)
 └── pipeline.py         # End-to-end extraction pipeline (planned)
 ```

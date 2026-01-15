@@ -48,6 +48,17 @@ from z3adapter.ikr.triples.extractor import (
     TripleExtractor,
     extract_triples,
 )
+from z3adapter.ikr.triples.entity_resolver import (
+    EntityMatch,
+    EntityResolver,
+)
+from z3adapter.ikr.triples.verification import (
+    triple_to_verification,
+    verification_to_triple,
+    store_to_kb,
+    verify_triple_against_store,
+    verify_triples_against_store,
+)
 
 __all__ = [
     # Schema
@@ -59,4 +70,13 @@ __all__ = [
     "ExtractionResult",
     "TripleExtractor",
     "extract_triples",
+    # Entity Resolution
+    "EntityMatch",
+    "EntityResolver",
+    # Verification
+    "triple_to_verification",
+    "verification_to_triple",
+    "store_to_kb",
+    "verify_triple_against_store",
+    "verify_triples_against_store",
 ]
