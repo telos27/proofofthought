@@ -10,6 +10,7 @@ Core Components:
     - Predicate: Enum of 7 generic predicates
     - TripleExtractor: LLM-based triple extraction
     - ExtractionResult: Result of extraction with triples and raw response
+    - ExtractionPipeline: End-to-end text → verified triples workflow
 
 Example:
     from z3adapter.ikr.triples import Triple, TripleStore, Predicate
@@ -35,6 +36,20 @@ Example (extraction):
 
     for triple in result.triples:
         print(f"{triple.subject} {triple.predicate} {triple.object}")
+
+Example (pipeline):
+    from openai import OpenAI
+    from z3adapter.ikr.triples import ExtractionPipeline
+
+    client = OpenAI()
+    pipeline = ExtractionPipeline.create(client, model="gpt-4o")
+
+    # Ingest knowledge
+    pipeline.ingest("Stress causes anxiety.", source="Psychology 101")
+
+    # Query the knowledge base
+    result = pipeline.query("Does stress cause worry?")
+    print(result.verdict)  # SUPPORTED (fuzzy match)
 """
 
 from z3adapter.ikr.triples.schema import (
@@ -59,6 +74,12 @@ from z3adapter.ikr.triples.verification import (
     verify_triple_against_store,
     verify_triples_against_store,
 )
+from z3adapter.ikr.triples.storage import SQLiteTripleStorage
+from z3adapter.ikr.triples.pipeline import (
+    ExtractionPipeline,
+    IngestResult,
+    QueryResult,
+)
 
 __all__ = [
     # Schema
@@ -79,4 +100,10 @@ __all__ = [
     "store_to_kb",
     "verify_triple_against_store",
     "verify_triples_against_store",
+    # Storage
+    "SQLiteTripleStorage",
+    # Pipeline
+    "ExtractionPipeline",
+    "IngestResult",
+    "QueryResult",
 ]

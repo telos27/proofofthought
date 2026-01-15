@@ -413,19 +413,52 @@ print(result2.verdict)  # VerificationVerdict.CONTRADICTED
 - **NARS truth values**: Uncertainty propagation throughout
 - **Predicate polarity**: causes ↔ prevents for contradiction detection
 
+**End-to-End Pipeline:**
+```python
+from openai import OpenAI
+from z3adapter.ikr.triples import ExtractionPipeline
+
+# Create pipeline with SQLite persistence
+client = OpenAI()
+pipeline = ExtractionPipeline.create(
+    client,
+    model="gpt-4o",
+    db_path="knowledge.db"  # Optional: omit for in-memory only
+)
+
+# Ingest knowledge from text
+pipeline.ingest("Stress causes anxiety.", source="Psychology 101")
+pipeline.ingest("Exercise prevents stress.", source="Health Guide")
+
+# Query the knowledge base
+result = pipeline.query("Does stress cause anxiousness?", match_threshold=0.4)
+print(result.verdict)  # SUPPORTED (fuzzy match)
+
+result2 = pipeline.query("Does exercise cause stress?")
+print(result2.verdict)  # CONTRADICTED (opposite predicate)
+
+# Direct verification without LLM
+triple = Triple(id="q1", subject="stress", predicate=Predicate.CAUSES, object="anxiety")
+result = pipeline.verify(triple)
+
+# Save/load from SQLite
+pipeline.save()   # Persist current state
+pipeline.load()   # Load from database
+```
+
 **File Structure:**
 ```
 z3adapter/ikr/triples/
 ├── __init__.py         # Package exports
-├── schema.py           # Triple, TripleStore, Predicate (implemented)
-├── extractor.py        # LLM-based triple extraction (implemented)
-├── entity_resolver.py  # Fuzzy entity matching (implemented)
-├── verification.py     # Fuzzy-NARS bridge (implemented)
-├── storage.py          # SQLite persistence (planned)
-└── pipeline.py         # End-to-end extraction pipeline (planned)
+├── schema.py           # Triple, TripleStore, Predicate
+├── extractor.py        # LLM-based triple extraction
+├── entity_resolver.py  # Fuzzy entity matching
+├── verification.py     # Fuzzy-NARS bridge
+├── storage.py          # SQLite persistence
+└── pipeline.py         # End-to-end extraction pipeline
 ```
 
-See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for full implementation plan.
+See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for design decisions.
 
 ### Error Handling
 - Failed generations trigger retry with error feedback
