@@ -20,7 +20,8 @@ from z3adapter.ikr.schema import TruthValue
 from .fact_store import FactStore, GroundAtom, StoredFact
 from .rule import InternalRule, compile_rules
 from .unification import RuleAtom, Bindings, is_variable, unify_atom_with_fact
-from .truth_functions import conjunction, deduction, revise_multiple
+from .truth_functions import revise_multiple
+from .truth_strategies import TruthStrategy, TruthFormulaName, get_strategy
 
 if TYPE_CHECKING:
     from z3adapter.ikr.schema import IKR, Query
@@ -73,15 +74,18 @@ class NARSDatalogEngine:
         self,
         max_iterations: int = 100,
         min_confidence: float = 0.01,
+        truth_formula: TruthFormulaName = "current",
     ) -> None:
         """Initialize the engine.
 
         Args:
             max_iterations: Maximum fixpoint iterations before stopping
             min_confidence: Minimum confidence to keep a derived fact
+            truth_formula: Truth function strategy ("current", "opennars", "floor", "evidence")
         """
         self.max_iterations = max_iterations
         self.min_confidence = min_confidence
+        self._truth_strategy: TruthStrategy = get_strategy(truth_formula)
 
         self._fact_store = FactStore()
         self._rules: list[InternalRule] = []
@@ -101,18 +105,33 @@ class NARSDatalogEngine:
     def load_ikr(self, ikr: "IKR") -> None:
         """Load facts and rules from IKR.
 
+        Handles epistemic contexts: facts with epistemic_context are stored
+        as agent-specific beliefs, while facts without are objective facts.
+
         Args:
             ikr: The IKR to load
         """
         self._fact_store.clear()
         self._rules.clear()
 
+        # Track agents from epistemic config
+        self._agents: set[str] = set()
+        if ikr.epistemic_config:
+            self._agents = set(ikr.epistemic_config.agents)
+
         # Load base facts
         for fact in ikr.facts:
+            # Extract agent from epistemic context (MVP: only top-level agent)
+            agent = None
+            if fact.epistemic_context:
+                agent = fact.epistemic_context.agent
+                self._agents.add(agent)
+
             atom = GroundAtom(
                 predicate=fact.predicate,
                 arguments=tuple(fact.arguments),
                 negated=fact.negated,
+                agent=agent,
             )
 
             # Get truth value (default to certain if not specified)
@@ -129,7 +148,8 @@ class NARSDatalogEngine:
         self._compute_strata()
 
         logger.debug(
-            f"Loaded {self._fact_store.size()} facts and {len(self._rules)} rules"
+            f"Loaded {self._fact_store.size()} facts and {len(self._rules)} rules "
+            f"({len(self._agents)} agents)"
         )
 
     def run(self) -> int:
@@ -151,13 +171,18 @@ class NARSDatalogEngine:
         self._iterations_run = total_iterations
         return total_iterations
 
-    def query(self, q: "Query") -> InferenceResult:
+    def query(self, q: "Query", agent: str | None = None) -> InferenceResult:
         """Query for a specific atom after inference.
 
         Runs inference if not already run, then looks up the query.
+        Supports epistemic queries where agent specifies whose beliefs to query.
 
         Args:
             q: The query from IKR
+            agent: Agent perspective for epistemic queries:
+                   - None: Query objective facts only
+                   - "*": Query all facts (objective + all agents)
+                   - "alice": Query from Alice's perspective (objective + Alice's beliefs)
 
         Returns:
             InferenceResult with truth value if found
@@ -166,13 +191,24 @@ class NARSDatalogEngine:
         if self._iterations_run == 0:
             self.run()
 
+        # For agent-specific queries, check both objective and agent-specific facts
+        query_agent = None if agent == "*" else agent
+
         atom = GroundAtom(
             predicate=q.predicate,
             arguments=tuple(q.arguments),
             negated=q.negated,
+            agent=query_agent,
         )
 
+        # First try exact match with the agent
         stored = self._fact_store.get(atom)
+
+        # If querying from an agent's perspective and no agent-specific fact,
+        # fall back to objective fact
+        if stored is None and agent is not None and agent != "*":
+            objective_atom = atom.with_agent(None)
+            stored = self._fact_store.get(objective_atom)
 
         if stored:
             return InferenceResult(
@@ -182,13 +218,20 @@ class NARSDatalogEngine:
                 iterations=self._iterations_run,
                 facts_derived=self._fact_store.size(),
                 explanation=f"Derived with {stored.derivation_count} derivation(s), "
-                f"source: {stored.source}",
+                f"source: {stored.source}"
+                + (f", agent: {stored.atom.agent}" if stored.atom.agent else ""),
             )
         else:
             # Check if the positive version exists for negated queries
             if q.negated:
                 positive_atom = atom.positive()
                 positive_stored = self._fact_store.get(positive_atom)
+
+                # Also check objective positive if querying from agent perspective
+                if positive_stored is None and agent is not None and agent != "*":
+                    objective_positive = positive_atom.with_agent(None)
+                    positive_stored = self._fact_store.get(objective_positive)
+
                 if positive_stored is None:
                     # Negation as failure: not(P) is true if P is not derivable
                     return InferenceResult(
@@ -342,8 +385,8 @@ class NARSDatalogEngine:
 
                 for final_bindings, more_truths in all_solutions:
                     body_truths_full = body_truths + more_truths
-                    body_tv = conjunction(body_truths_full)
-                    derived_tv = deduction(body_tv, rule.rule_truth)
+                    body_tv = self._truth_strategy.conjunction(body_truths_full)
+                    derived_tv = self._truth_strategy.deduction(body_tv, rule.rule_truth)
 
                     head_args = tuple(
                         final_bindings.get(arg, arg) for arg in rule.head.arguments
@@ -382,8 +425,8 @@ class NARSDatalogEngine:
                 body_truths_full = body_truths + more_truths
 
                 # Compute derived truth: conjunction of body + deduction
-                body_tv = conjunction(body_truths_full)
-                derived_tv = deduction(body_tv, rule.rule_truth)
+                body_tv = self._truth_strategy.conjunction(body_truths_full)
+                derived_tv = self._truth_strategy.deduction(body_tv, rule.rule_truth)
 
                 # Build head atom with bindings
                 head_args = tuple(
@@ -518,15 +561,19 @@ class NARSDatalogEngine:
         )
 
 
-def from_ikr(ikr: "IKR") -> NARSDatalogEngine:
+def from_ikr(
+    ikr: "IKR",
+    truth_formula: TruthFormulaName = "current",
+) -> NARSDatalogEngine:
     """Convenience function to create engine from IKR.
 
     Args:
         ikr: The IKR to load
+        truth_formula: Truth function strategy ("current", "opennars", "floor", "evidence")
 
     Returns:
         Initialized NARSDatalogEngine with facts and rules loaded
     """
-    engine = NARSDatalogEngine()
+    engine = NARSDatalogEngine(truth_formula=truth_formula)
     engine.load_ikr(ikr)
     return engine

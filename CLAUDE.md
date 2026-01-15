@@ -266,6 +266,7 @@ result = verify_triple(
 print(result.verdict)  # VerificationVerdict.SUPPORTED
 
 # Polarity detection: "causes" contradicts "prevents"
+# (60+ opposite pairs: temporal, spatial, quantity, quality, etc.)
 result2 = verify_triple(
     VerificationTriple("stress", "causes", "relaxation"),
     kb, combined_lexical_similarity
@@ -298,6 +299,15 @@ engine = NARSDatalogEngine()
 KBLoader.load_modules(engine, ["biology", "psychology"])
 engine.load_ikr(ikr)
 result = engine.query(ikr.query)
+
+# Pluggable truth strategies (to address confidence degradation)
+engine = NARSDatalogEngine(truth_formula="opennars")  # Options: current, opennars, floor, evidence
+# or
+engine = from_ikr(ikr, truth_formula="floor")
+
+# Epistemic queries (query from agent's perspective)
+result = engine.query(ikr.query, agent="alice")  # Alice's beliefs + objective facts
+result = engine.query(ikr.query, agent=None)     # Objective facts only
 ```
 
 NARS-Datalog benefits:
@@ -306,6 +316,8 @@ NARS-Datalog benefits:
 - **Evidence combination**: Multiple derivations combine via NARS revision
 - **Defeasible reasoning**: Rules can have uncertain truth values (e.g., "birds typically fly")
 - **Transparent inference**: Explainable derivation chains
+- **Pluggable truth strategies**: Choose from `current`, `opennars`, `floor`, or `evidence` to control confidence degradation
+- **Epistemic logic (MVP)**: Facts can have `epistemic_context` (agent beliefs), queryable via `agent` parameter
 
 NARS-Datalog KB structure (`z3adapter/ikr/nars_datalog/kb/`):
 ```json

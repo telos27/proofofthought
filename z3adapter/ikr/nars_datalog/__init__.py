@@ -60,6 +60,11 @@ from .engine import (
     InferenceResult,
     from_ikr,
 )
+from .truth_strategies import (
+    TruthStrategy,
+    TruthFormulaName,
+    get_strategy,
+)
 from .kb_loader import (
     KBLoader,
     KB_DIR,
@@ -73,6 +78,10 @@ __all__ = [
     "revise",
     "revise_multiple",
     "DEFAULT_RULE_TRUTH",
+    # Truth strategies
+    "TruthStrategy",
+    "TruthFormulaName",
+    "get_strategy",
     # Fact storage
     "GroundAtom",
     "StoredFact",

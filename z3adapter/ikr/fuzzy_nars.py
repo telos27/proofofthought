@@ -119,32 +119,107 @@ class VerificationResult:
 # Predicate Polarity (for contradiction detection)
 # =============================================================================
 
-PREDICATE_OPPOSITES: dict[str, str] = {
+# Base opposite pairs (single direction - bidirectional dict is auto-generated)
+# Note: Each pair must be unique for symmetric lookup to work correctly
+_OPPOSITE_PAIRS: list[tuple[str, str]] = [
     # Causation
-    "causes": "prevents",
-    "prevents": "causes",
-    "leads_to": "prevents",
-    "results_in": "prevents",
+    ("causes", "prevents"),
+    ("leads_to", "obstructs"),
+    ("results_in", "stops"),
+    ("triggers", "suppresses_trigger"),
+    ("produces", "halts"),
     # Support/Opposition
-    "supports": "contradicts",
-    "contradicts": "supports",
+    ("supports", "contradicts"),
+    ("confirms", "denies"),
+    ("proves", "disproves"),
+    ("validates", "invalidates"),
+    ("agrees_with", "disagrees_with"),
     # Magnitude
-    "increases": "decreases",
-    "decreases": "increases",
+    ("increases", "decreases"),
+    ("raises", "lowers"),
+    ("amplifies", "diminishes"),
+    ("strengthens", "weakens"),
+    ("expands", "contracts"),
+    ("grows", "shrinks"),
+    ("enhances", "reduces"),
     # Enablement
-    "enables": "inhibits",
-    "inhibits": "enables",
-    "promotes": "suppresses",
-    "suppresses": "promotes",
-    # Requirements
-    "requires": "excludes",
-    "excludes": "requires",
+    ("enables", "disables"),
+    ("promotes", "suppresses"),
+    ("activates", "deactivates"),
+    ("stimulates", "inhibits"),
+    ("facilitates", "hinders"),
+    ("allows", "blocks"),
+    ("permits", "forbids"),
+    ("encourages", "discourages"),
+    # Requirements/Exclusion
+    ("requires", "excludes"),
+    ("needs", "avoids"),
+    ("includes", "omits"),
+    ("accepts", "rejects"),
     # Boolean properties
-    "is": "is_not",
-    "is_not": "is",
-    "has": "lacks",
-    "lacks": "has",
-}
+    ("is", "is_not"),
+    ("has", "lacks"),
+    ("can", "cannot"),
+    ("will", "will_not"),
+    ("does", "does_not"),
+    ("exists", "absent"),
+    # Temporal
+    ("before", "after"),
+    ("precedes", "follows"),
+    ("starts", "ends"),
+    ("begins", "finishes"),
+    ("earlier", "later"),
+    # Spatial
+    ("above", "below"),
+    ("inside", "outside"),
+    ("near", "far"),
+    ("contains", "excludes_from"),
+    ("enters", "exits"),
+    ("approaches", "recedes"),
+    # Quantity
+    ("more", "less"),
+    ("many", "few"),
+    ("all", "none"),
+    ("always", "never"),
+    ("most", "least"),
+    # Quality/State
+    ("good", "bad"),
+    ("positive", "negative"),
+    ("true", "false"),
+    ("correct", "incorrect"),
+    ("valid", "invalid"),
+    ("safe", "dangerous"),
+    ("healthy", "unhealthy"),
+    ("beneficial", "harmful"),
+    ("helps", "hurts"),
+    # Motion/Direction
+    ("up", "down"),
+    ("forward", "backward"),
+    ("ascending", "descending"),
+    ("rising", "falling"),
+    ("opens", "closes"),
+    # Compatibility
+    ("compatible_with", "incompatible_with"),
+    ("consistent_with", "inconsistent_with"),
+    ("aligns_with", "conflicts_with"),
+    # Emotional/Social
+    ("likes", "dislikes"),
+    ("loves", "hates"),
+    ("trusts", "distrusts"),
+    ("attracts", "repels"),
+]
+
+
+def _build_opposites_dict() -> dict[str, str]:
+    """Build bidirectional opposites dict from base pairs."""
+    result: dict[str, str] = {}
+    for a, b in _OPPOSITE_PAIRS:
+        result[a] = b
+        result[b] = a
+    return result
+
+
+PREDICATE_OPPOSITES: dict[str, str] = _build_opposites_dict()
 
 
 def get_predicate_polarity(p1: str, p2: str, base_sim: float) -> tuple[float, float]:

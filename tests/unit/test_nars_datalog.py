@@ -718,3 +718,274 @@ class TestKBLoader:
         stats = KBLoader.load_modules(engine, ["nonexistent_module"])
 
         assert stats["nonexistent_module"] == 0
+
+
+# =============================================================================
+# Truth Strategy Tests
+# =============================================================================
+
+
+class TestTruthStrategies:
+    """Test pluggable truth function strategies."""
+
+    def test_get_strategy_current(self):
+        """Can get the current (default) strategy."""
+        from z3adapter.ikr.nars_datalog.truth_strategies import get_strategy
+
+        strategy = get_strategy("current")
+        assert strategy is not None
+
+    def test_get_strategy_opennars(self):
+        """Can get the OpenNARS strategy."""
+        from z3adapter.ikr.nars_datalog.truth_strategies import get_strategy
+
+        strategy = get_strategy("opennars")
+        assert strategy is not None
+
+    def test_opennars_confidence_independent_of_frequency(self):
+        """OpenNARS confidence should not depend on frequency."""
+        from z3adapter.ikr.nars_datalog.truth_strategies import get_strategy
+
+        strategy = get_strategy("opennars")
+        premise = TruthValue(frequency=0.5, confidence=0.9)
+        rule = TruthValue(frequency=1.0, confidence=0.9)
+
+        result = strategy.deduction(premise, rule)
+        # Confidence should be 0.9 * 0.9 = 0.81, not affected by f=0.5
+        assert abs(result.confidence - 0.81) < 0.01
+
+    def test_floor_strategy_prevents_low_confidence(self):
+        """Floor strategy should maintain minimum confidence."""
+        from z3adapter.ikr.nars_datalog.truth_strategies import FloorStrategy
+
+        strategy = FloorStrategy(floor=0.2)
+        premise = TruthValue(frequency=0.1, confidence=0.1)
+        rule = TruthValue(frequency=0.1, confidence=0.1)
+
+        result = strategy.deduction(premise, rule)
+        assert result.confidence >= 0.2
+
+    def test_engine_uses_selected_strategy(self):
+        """Engine should use the configured truth strategy."""
+        from z3adapter.ikr.nars_datalog import from_ikr
+        from z3adapter.ikr.schema import (
+            IKR, Meta, QuestionType, Type, Entity, Relation,
+            Fact, Rule, RuleCondition, Query, QuantifiedVariable
+        )
+
+        # Create a chain with UNCERTAIN premise: A -> B -> C with 2-hop inference
+        # Use frequency < 1.0 to show the difference between strategies
+        ikr = IKR(
+            meta=Meta(question="Chain test", question_type=QuestionType.YES_NO),
+            types=[Type(name="Thing")],
+            entities=[Entity(name="x", type="Thing")],
+            relations=[
+                Relation(name="a", signature=["Thing"]),
+                Relation(name="b", signature=["Thing"]),
+                Relation(name="c", signature=["Thing"]),
+            ],
+            # Use uncertain fact with f=0.8 to see the difference
+            facts=[Fact(
+                predicate="a",
+                arguments=["x"],
+                truth_value=TruthValue(frequency=0.8, confidence=0.9),
+            )],
+            rules=[
+                Rule(
+                    antecedent=RuleCondition(predicate="a", arguments=["X"]),
+                    consequent=RuleCondition(predicate="b", arguments=["X"]),
+                    quantified_vars=[QuantifiedVariable(name="X", type="Thing")],
+                ),
+                Rule(
+                    antecedent=RuleCondition(predicate="b", arguments=["X"]),
+                    consequent=RuleCondition(predicate="c", arguments=["X"]),
+                    quantified_vars=[QuantifiedVariable(name="X", type="Thing")],
+                ),
+            ],
+            query=Query(predicate="c", arguments=["x"]),
+        )
+
+        # With current strategy (aggressive degradation: c = f1*f2*c1*c2)
+        engine_current = from_ikr(ikr, truth_formula="current")
+        result_current = engine_current.query(ikr.query)
+
+        # With opennars strategy (less aggressive: c = c1*c2)
+        engine_opennars = from_ikr(ikr, truth_formula="opennars")
+        result_opennars = engine_opennars.query(ikr.query)
+
+        # Both should find the result
+        assert result_current.found
+        assert result_opennars.found
+
+        # OpenNARS should preserve confidence better when premise has f < 1.0
+        # Current: uses f in confidence calc, OpenNARS doesn't
+        assert result_opennars.truth_value.confidence > result_current.truth_value.confidence
+
+
+# =============================================================================
+# Epistemic Logic Tests
+# =============================================================================
+
+
+class TestEpistemicLogic:
+    """Test epistemic logic execution (MVP)."""
+
+    def test_objective_facts_visible_to_all(self):
+        """Objective facts should be visible to all agents."""
+        from z3adapter.ikr.nars_datalog import from_ikr
+        from z3adapter.ikr.schema import (
+            IKR, Meta, QuestionType, Type, Entity, Relation,
+            Fact, Query, EpistemicConfig
+        )
+
+        ikr = IKR(
+            meta=Meta(question="Test", question_type=QuestionType.YES_NO),
+            epistemic_config=EpistemicConfig(agents=["alice", "bob"]),
+            types=[Type(name="Thing")],
+            entities=[Entity(name="x", type="Thing")],
+            relations=[Relation(name="p", signature=["Thing"])],
+            facts=[Fact(predicate="p", arguments=["x"])],  # Objective fact
+            rules=[],
+            query=Query(predicate="p", arguments=["x"]),
+        )
+
+        engine = from_ikr(ikr)
+
+        # Visible from any perspective
+        result_objective = engine.query(ikr.query, agent=None)
+        result_alice = engine.query(ikr.query, agent="alice")
+        result_bob = engine.query(ikr.query, agent="bob")
+
+        assert result_objective.found
+        assert result_alice.found  # Objective facts visible to alice
+        assert result_bob.found  # Objective facts visible to bob
+
+    def test_belief_visible_only_to_agent(self):
+        """Agent beliefs should only be visible to that agent."""
+        from z3adapter.ikr.nars_datalog import from_ikr
+        from z3adapter.ikr.schema import (
+            IKR, Meta, QuestionType, Type, Entity, Relation,
+            Fact, Query, EpistemicConfig, EpistemicContext, EpistemicOperator
+        )
+
+        ikr = IKR(
+            meta=Meta(question="Test", question_type=QuestionType.YES_NO),
+            epistemic_config=EpistemicConfig(agents=["alice", "bob"]),
+            types=[Type(name="Thing")],
+            entities=[Entity(name="x", type="Thing")],
+            relations=[Relation(name="p", signature=["Thing"])],
+            facts=[
+                Fact(
+                    predicate="p",
+                    arguments=["x"],
+                    epistemic_context=EpistemicContext(
+                        agent="alice",
+                        modality=EpistemicOperator.BELIEVES
+                    ),
+                ),
+            ],
+            rules=[],
+            query=Query(predicate="p", arguments=["x"]),
+        )
+
+        engine = from_ikr(ikr)
+
+        # Visible to alice (her belief)
+        result_alice = engine.query(ikr.query, agent="alice")
+        assert result_alice.found
+
+        # Not visible to bob (he doesn't share Alice's belief)
+        result_bob = engine.query(ikr.query, agent="bob")
+        assert not result_bob.found
+
+        # Not visible from objective perspective
+        result_objective = engine.query(ikr.query, agent=None)
+        assert not result_objective.found
+
+    def test_agent_index_in_fact_store(self):
+        """FactStore should properly index facts by agent."""
+        from z3adapter.ikr.nars_datalog import FactStore, GroundAtom
+
+        store = FactStore()
+
+        # Add objective fact
+        obj_atom = GroundAtom(predicate="p", arguments=("x",), agent=None)
+        store.add(obj_atom, TruthValue(frequency=1.0, confidence=0.9), source="base")
+
+        # Add Alice's belief
+        alice_atom = GroundAtom(predicate="p", arguments=("y",), agent="alice")
+        store.add(alice_atom, TruthValue(frequency=1.0, confidence=0.9), source="base")
+
+        # Check agents
+        agents = store.get_agents()
+        assert "alice" in agents
+        assert None not in agents  # None is not returned as an "agent"
+
+        # Check visibility
+        visible_to_alice = list(store.get_by_predicate_for_agent("p", agent="alice"))
+        assert len(visible_to_alice) == 2  # objective + alice's belief
+
+        visible_to_bob = list(store.get_by_predicate_for_agent("p", agent="bob"))
+        assert len(visible_to_bob) == 1  # only objective
+
+
+# =============================================================================
+# Predicate Opposites Tests
+# =============================================================================
+
+
+class TestExpandedPredicateOpposites:
+    """Test expanded predicate opposites dictionary."""
+
+    def test_symmetric_opposites(self):
+        """Opposites should be symmetric."""
+        from z3adapter.ikr.fuzzy_nars import PREDICATE_OPPOSITES, _OPPOSITE_PAIRS
+
+        for a, b in _OPPOSITE_PAIRS:
+            assert PREDICATE_OPPOSITES.get(a) == b, f"{a} should map to {b}"
+            assert PREDICATE_OPPOSITES.get(b) == a, f"{b} should map to {a}"
+
+    def test_temporal_opposites(self):
+        """Test temporal opposites."""
+        from z3adapter.ikr.fuzzy_nars import get_predicate_polarity
+
+        sim, pol = get_predicate_polarity("before", "after", 0.3)
+        assert pol == -1.0  # Opposites
+
+    def test_spatial_opposites(self):
+        """Test spatial opposites."""
+        from z3adapter.ikr.fuzzy_nars import get_predicate_polarity
+
+        sim, pol = get_predicate_polarity("above", "below", 0.3)
+        assert pol == -1.0  # Opposites
+
+    def test_quantity_opposites(self):
+        """Test quantity opposites."""
+        from z3adapter.ikr.fuzzy_nars import get_predicate_polarity
+
+        sim, pol = get_predicate_polarity("more", "less", 0.3)
+        assert pol == -1.0  # Opposites
+
+    def test_quality_opposites(self):
+        """Test quality opposites."""
+        from z3adapter.ikr.fuzzy_nars import get_predicate_polarity
+
+        sim, pol = get_predicate_polarity("good", "bad", 0.3)
+        assert pol == -1.0  # Opposites
+
+    def test_no_false_opposites(self):
+        """Unrelated predicates should not be opposites."""
+        from z3adapter.ikr.fuzzy_nars import get_predicate_polarity
+
+        sim, pol = get_predicate_polarity("causes", "contains", 0.3)
+        assert pol == 1.0  # Not opposites
+
+    def test_expanded_coverage(self):
+        """Should have more pairs than before."""
+        from z3adapter.ikr.fuzzy_nars import _OPPOSITE_PAIRS, PREDICATE_OPPOSITES
+
+        # Original had 14 base pairs (28 entries with bidirectional)
+        # New should have many more
+        assert len(_OPPOSITE_PAIRS) > 30
+        # Bidirectional dict should have ~2x entries
+        assert len(PREDICATE_OPPOSITES) >= len(_OPPOSITE_PAIRS) * 2 - 10  # Some overlap

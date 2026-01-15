@@ -31,16 +31,19 @@ class GroundAtom:
         predicate: The relation/predicate name
         arguments: Tuple of constant arguments (tuple for hashability)
         negated: Whether this is a negated atom
+        agent: Agent whose belief this is (None = objective fact)
     """
 
     predicate: str
     arguments: tuple[str, ...]
     negated: bool = False
+    agent: str | None = None  # None = objective fact, str = agent's belief
 
     def __str__(self) -> str:
         neg = "NOT " if self.negated else ""
         args = ", ".join(self.arguments)
-        return f"{neg}{self.predicate}({args})"
+        agent_str = f"[{self.agent}] " if self.agent else ""
+        return f"{agent_str}{neg}{self.predicate}({args})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -53,6 +56,16 @@ class GroundAtom:
             predicate=self.predicate,
             arguments=self.arguments,
             negated=False,
+            agent=self.agent,
+        )
+
+    def with_agent(self, agent: str | None) -> GroundAtom:
+        """Return a copy with a different agent."""
+        return GroundAtom(
+            predicate=self.predicate,
+            arguments=self.arguments,
+            negated=self.negated,
+            agent=agent,
         )
 
 
@@ -83,6 +96,7 @@ class FactStore:
     - Exact atom (predicate + all arguments)
     - Predicate only (for rule matching)
     - Predicate + first argument (for join optimization)
+    - Agent (for epistemic logic)
 
     When a fact is added that already exists, truth values are
     combined using NARS revision (evidence pooling).
@@ -98,6 +112,9 @@ class FactStore:
 
         # Index by (predicate, first_arg) for join optimization
         self._by_pred_arg0: dict[tuple[str, str], set[GroundAtom]] = defaultdict(set)
+
+        # Index by agent for epistemic queries (None = objective facts)
+        self._by_agent: dict[str | None, set[GroundAtom]] = defaultdict(set)
 
     def add(
         self,
@@ -234,6 +251,7 @@ class FactStore:
         self._facts.clear()
         self._by_predicate.clear()
         self._by_pred_arg0.clear()
+        self._by_agent.clear()
 
     def _index_fact(self, atom: GroundAtom) -> None:
         """Add atom to indices.
@@ -245,3 +263,38 @@ class FactStore:
         if atom.arguments:
             key = (atom.predicate, atom.arguments[0])
             self._by_pred_arg0[key].add(atom)
+        self._by_agent[atom.agent].add(atom)
+
+    def get_by_predicate_for_agent(
+        self,
+        predicate: str,
+        agent: str | None = None,
+    ) -> Iterator[StoredFact]:
+        """Get facts visible to an agent.
+
+        Implements epistemic visibility:
+        - Objective facts (agent=None) are visible to all agents
+        - Agent-specific facts are visible only to that agent
+
+        Args:
+            predicate: The predicate name
+            agent: Agent perspective (None = objective only, "*" = all)
+
+        Yields:
+            StoredFact objects visible from the given agent's perspective
+        """
+        for atom in self._by_predicate.get(predicate, set()):
+            # Objective facts (agent=None) are always visible
+            if atom.agent is None:
+                yield self._facts[atom]
+            # Agent-specific facts visible to that agent or when agent="*"
+            elif agent == "*" or atom.agent == agent:
+                yield self._facts[atom]
+
+    def get_agents(self) -> set[str]:
+        """Get all agents that have beliefs in the store.
+
+        Returns:
+            Set of agent names (excludes None for objective facts)
+        """
+        return {agent for agent in self._by_agent.keys() if agent is not None}
