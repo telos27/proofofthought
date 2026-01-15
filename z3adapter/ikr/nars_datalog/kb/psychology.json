@@ -1,0 +1,48 @@
+{
+  "name": "psychology",
+  "version": "0.1",
+  "description": "Knowledge about mental states, emotions, behavior, and psychological phenomena",
+
+  "facts": [],
+
+  "rules": [
+    {
+      "name": "fear_causes_avoidance",
+      "quantified_vars": [
+        {"name": "P", "type": "Person"},
+        {"name": "X", "type": "Thing"}
+      ],
+      "antecedent": {"predicate": "fears", "arguments": ["P", "X"]},
+      "consequent": {"predicate": "avoids", "arguments": ["P", "X"]},
+      "truth_value": {"frequency": 0.85, "confidence": 0.8},
+      "justification": "Fear typically leads to avoidance behavior"
+    },
+    {
+      "name": "stress_impairs_concentration",
+      "quantified_vars": [{"name": "P", "type": "Person"}],
+      "antecedent": {"predicate": "is_stressed", "arguments": ["P"]},
+      "consequent": {"predicate": "has_difficulty_concentrating", "arguments": ["P"]},
+      "truth_value": {"frequency": 0.8, "confidence": 0.75},
+      "justification": "High stress often impairs cognitive focus"
+    },
+    {
+      "name": "phobia_is_fear",
+      "quantified_vars": [
+        {"name": "P", "type": "Person"},
+        {"name": "X", "type": "Thing"}
+      ],
+      "antecedent": {"predicate": "has_phobia_of", "arguments": ["P", "X"]},
+      "consequent": {"predicate": "fears", "arguments": ["P", "X"]},
+      "truth_value": {"frequency": 1.0, "confidence": 0.95},
+      "justification": "Phobias are a type of intense fear"
+    },
+    {
+      "name": "anxiety_causes_stress",
+      "quantified_vars": [{"name": "P", "type": "Person"}],
+      "antecedent": {"predicate": "has_anxiety", "arguments": ["P"]},
+      "consequent": {"predicate": "is_stressed", "arguments": ["P"]},
+      "truth_value": {"frequency": 0.9, "confidence": 0.85},
+      "justification": "Anxiety disorders typically cause chronic stress"
+    }
+  ]
+}

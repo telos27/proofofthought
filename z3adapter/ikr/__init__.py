@@ -49,6 +49,17 @@ from z3adapter.ikr.fuzzy_nars import (
     verify_triple,
     verify_answer,
 )
+from z3adapter.ikr.nars_datalog import (
+    NARSDatalogEngine,
+    InferenceResult,
+    from_ikr,
+    GroundAtom,
+    StoredFact,
+    FactStore,
+    InternalRule,
+    conjunction,
+    deduction,
+)
 
 __all__ = [
     # Schema
@@ -81,4 +92,14 @@ __all__ = [
     "revise_multiple",
     "verify_triple",
     "verify_answer",
+    # NARS-Datalog engine
+    "NARSDatalogEngine",
+    "InferenceResult",
+    "from_ikr",
+    "GroundAtom",
+    "StoredFact",
+    "FactStore",
+    "InternalRule",
+    "conjunction",
+    "deduction",
 ]

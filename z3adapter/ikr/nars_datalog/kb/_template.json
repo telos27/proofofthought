@@ -1,0 +1,112 @@
+{
+  "_comment": "Template for NARS-Datalog Knowledge Base modules",
+  "name": "template",
+  "version": "1.0",
+  "description": "Template showing KB structure with NARS truth values",
+
+  "facts": [
+    {
+      "_comment": "Ground facts with optional truth values",
+      "predicate": "example_predicate",
+      "arguments": ["arg1", "arg2"],
+      "negated": false,
+      "truth_value": {
+        "frequency": 1.0,
+        "confidence": 0.9
+      }
+    },
+    {
+      "_comment": "Uncertain fact (defeasible knowledge)",
+      "predicate": "typically_true",
+      "arguments": ["x"],
+      "truth_value": {
+        "frequency": 0.85,
+        "confidence": 0.8
+      }
+    },
+    {
+      "_comment": "Negated fact",
+      "predicate": "false_predicate",
+      "arguments": ["y"],
+      "negated": true,
+      "truth_value": {
+        "frequency": 1.0,
+        "confidence": 0.95
+      }
+    }
+  ],
+
+  "rules": [
+    {
+      "_comment": "Simple implication with certain truth",
+      "name": "example_rule",
+      "quantified_vars": [
+        {"name": "X", "type": "Thing"}
+      ],
+      "antecedent": {
+        "predicate": "condition",
+        "arguments": ["X"]
+      },
+      "consequent": {
+        "predicate": "conclusion",
+        "arguments": ["X"]
+      },
+      "justification": "Explanation of why this rule holds"
+    },
+    {
+      "_comment": "Rule with conjunction in body",
+      "name": "conjunction_rule",
+      "quantified_vars": [
+        {"name": "X", "type": "Thing"},
+        {"name": "Y", "type": "Thing"}
+      ],
+      "antecedent": {
+        "and": [
+          {"predicate": "cond1", "arguments": ["X"]},
+          {"predicate": "cond2", "arguments": ["X", "Y"]}
+        ]
+      },
+      "consequent": {
+        "predicate": "result",
+        "arguments": ["X", "Y"]
+      }
+    },
+    {
+      "_comment": "Defeasible rule (typically but not always true)",
+      "name": "defeasible_rule",
+      "quantified_vars": [
+        {"name": "X", "type": "Bird"}
+      ],
+      "antecedent": {
+        "predicate": "is_bird",
+        "arguments": ["X"]
+      },
+      "consequent": {
+        "predicate": "can_fly",
+        "arguments": ["X"]
+      },
+      "truth_value": {
+        "frequency": 0.9,
+        "confidence": 0.85
+      },
+      "justification": "Most birds can fly, but not all (e.g., penguins)"
+    },
+    {
+      "_comment": "Rule with negation in body",
+      "name": "negation_rule",
+      "quantified_vars": [
+        {"name": "X", "type": "Thing"}
+      ],
+      "antecedent": {
+        "and": [
+          {"predicate": "condition", "arguments": ["X"]},
+          {"predicate": "exception", "arguments": ["X"], "negated": true}
+        ]
+      },
+      "consequent": {
+        "predicate": "default_conclusion",
+        "arguments": ["X"]
+      }
+    }
+  ]
+}

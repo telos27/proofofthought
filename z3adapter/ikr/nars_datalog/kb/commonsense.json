@@ -1,0 +1,32 @@
+{
+  "name": "commonsense",
+  "version": "0.1",
+  "description": "Basic commonsense knowledge about objects, properties, and causation",
+
+  "facts": [],
+
+  "rules": [
+    {
+      "name": "causes_implies_possible_effect",
+      "quantified_vars": [
+        {"name": "X", "type": "Event"},
+        {"name": "Y", "type": "Event"}
+      ],
+      "antecedent": {"predicate": "causes", "arguments": ["X", "Y"]},
+      "consequent": {"predicate": "can_lead_to", "arguments": ["X", "Y"]},
+      "truth_value": {"frequency": 1.0, "confidence": 0.95},
+      "justification": "If X causes Y, then X can lead to Y"
+    },
+    {
+      "name": "prevents_blocks_effect",
+      "quantified_vars": [
+        {"name": "X", "type": "Event"},
+        {"name": "Y", "type": "Event"}
+      ],
+      "antecedent": {"predicate": "prevents", "arguments": ["X", "Y"]},
+      "consequent": {"predicate": "causes", "arguments": ["X", "Y"], "negated": true},
+      "truth_value": {"frequency": 1.0, "confidence": 0.9},
+      "justification": "If X prevents Y, then X does not cause Y"
+    }
+  ]
+}

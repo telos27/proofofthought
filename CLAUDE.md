@@ -34,8 +34,16 @@ mypy z3adapter/
 proofofthought/
 ├── z3adapter/                 # Main package (import name)
 │   ├── reasoning/             # High-level API (ProofOfThought, EvaluationPipeline)
-│   ├── backends/              # Execution backends (SMT2, JSON, IKR)
+│   ├── backends/              # Execution backends (SMT2, JSON, IKR, NARS-Datalog)
 │   ├── ikr/                   # Intermediate Knowledge Representation
+│   │   ├── nars_datalog/      # NARS-Datalog engine
+│   │   │   ├── kb/            # Knowledge base modules (JSON)
+│   │   │   ├── engine.py      # Semi-naive evaluation engine
+│   │   │   ├── fact_store.py  # Indexed fact storage
+│   │   │   ├── rule.py        # Rule compilation
+│   │   │   └── kb_loader.py   # KB module loader
+│   │   ├── fuzzy_nars.py      # Fuzzy-NARS verification
+│   │   └── schema.py          # IKR Pydantic schema
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
 │   ├── dsl/                   # DSL components (sorts, expressions)
 │   ├── solvers/               # Z3 solver wrappers
@@ -68,10 +76,11 @@ from z3adapter.reasoning import ProofOfThought
 from proofofthought import ...
 ```
 
-### Three Backends
+### Four Backends
 1. **SMT2** (default): Standard SMT-LIB 2.0 format, executed via Z3 CLI
 2. **JSON**: Custom DSL interpreted via Python Z3 API
 3. **IKR**: Intermediate Knowledge Representation - structured JSON compiled to SMT2
+4. **NARS-Datalog**: Python Datalog engine with NARS truth value propagation
 
 ### LLM Client Interface
 The project uses OpenAI's API format. Any client with `chat.completions.create()` works:
@@ -262,6 +271,53 @@ result2 = verify_triple(
     kb, combined_lexical_similarity
 )
 print(result2.verdict)  # VerificationVerdict.CONTRADICTED
+```
+
+### Data Flow (NARS-Datalog Backend - Native Inference)
+1. User provides natural language question
+2. LLM generates IKR JSON (same format as IKR backend)
+3. IKR facts and rules loaded into Python Datalog engine
+4. Semi-naive evaluation runs to fixpoint with NARS truth propagation
+5. Query result includes truth value (frequency, confidence)
+
+```python
+# NARS-Datalog usage (direct)
+from z3adapter.ikr.nars_datalog import NARSDatalogEngine, from_ikr, KBLoader
+from z3adapter.ikr.schema import IKR
+
+# Load IKR and run inference
+ikr = IKR.model_validate(ikr_data)
+engine = from_ikr(ikr)
+result = engine.query(ikr.query)
+
+print(f"Found: {result.found}")
+print(f"Truth: f={result.truth_value.frequency:.3f}, c={result.truth_value.confidence:.3f}")
+
+# Load knowledge base modules
+engine = NARSDatalogEngine()
+KBLoader.load_modules(engine, ["biology", "psychology"])
+engine.load_ikr(ikr)
+result = engine.query(ikr.query)
+```
+
+NARS-Datalog benefits:
+- **Native truth propagation**: NARS truth values flow through inference (not converted to weights)
+- **No external dependencies**: Pure Python, no Z3 or Souffle needed
+- **Evidence combination**: Multiple derivations combine via NARS revision
+- **Defeasible reasoning**: Rules can have uncertain truth values (e.g., "birds typically fly")
+- **Transparent inference**: Explainable derivation chains
+
+NARS-Datalog KB structure (`z3adapter/ikr/nars_datalog/kb/`):
+```json
+{
+  "name": "psychology",
+  "rules": [{
+    "name": "fear_causes_avoidance",
+    "antecedent": {"predicate": "fears", "arguments": ["P", "X"]},
+    "consequent": {"predicate": "avoids", "arguments": ["P", "X"]},
+    "truth_value": {"frequency": 0.85, "confidence": 0.8}
+  }]
+}
 ```
 
 ### Error Handling

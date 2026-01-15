@@ -1,0 +1,34 @@
+{
+  "name": "biology",
+  "version": "0.1",
+  "description": "Knowledge about biological entities, animals, and life processes",
+
+  "facts": [],
+
+  "rules": [
+    {
+      "name": "birds_typically_fly",
+      "quantified_vars": [{"name": "X", "type": "Animal"}],
+      "antecedent": {"predicate": "is_bird", "arguments": ["X"]},
+      "consequent": {"predicate": "can_fly", "arguments": ["X"]},
+      "truth_value": {"frequency": 0.9, "confidence": 0.85},
+      "justification": "Most birds can fly, with exceptions like penguins and ostriches"
+    },
+    {
+      "name": "mammals_are_animals",
+      "quantified_vars": [{"name": "X", "type": "Animal"}],
+      "antecedent": {"predicate": "is_mammal", "arguments": ["X"]},
+      "consequent": {"predicate": "is_animal", "arguments": ["X"]},
+      "truth_value": {"frequency": 1.0, "confidence": 0.99},
+      "justification": "Mammals are a subclass of animals"
+    },
+    {
+      "name": "animals_need_food",
+      "quantified_vars": [{"name": "X", "type": "Animal"}],
+      "antecedent": {"predicate": "is_animal", "arguments": ["X"]},
+      "consequent": {"predicate": "needs_food", "arguments": ["X"]},
+      "truth_value": {"frequency": 1.0, "confidence": 0.99},
+      "justification": "All animals require food for sustenance"
+    }
+  ]
+}

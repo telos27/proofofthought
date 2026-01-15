@@ -16,6 +16,11 @@ try:
 except ImportError:
     SouffleBackend = None  # type: ignore
 
+try:
+    from z3adapter.backends.nars_datalog_backend import NARSDatalogBackend
+except ImportError:
+    NARSDatalogBackend = None  # type: ignore
+
 __all__ = [
     "Backend",
     "VerificationResult",
@@ -23,4 +28,5 @@ __all__ = [
     "SMT2Backend",
     "IKRBackend",
     "SouffleBackend",
+    "NARSDatalogBackend",
 ]
