@@ -42,6 +42,7 @@ proofofthought/
 │   │   │   ├── fact_store.py  # Indexed fact storage
 │   │   │   ├── rule.py        # Rule compilation
 │   │   │   └── kb_loader.py   # KB module loader
+│   │   ├── triples/           # Triple extraction pipeline (planned)
 │   │   ├── fuzzy_nars.py      # Fuzzy-NARS verification
 │   │   └── schema.py          # IKR Pydantic schema
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
@@ -319,18 +320,55 @@ NARS-Datalog benefits:
 - **Pluggable truth strategies**: Choose from `current`, `opennars`, `floor`, or `evidence` to control confidence degradation
 - **Epistemic logic (MVP)**: Facts can have `epistemic_context` (agent beliefs), queryable via `agent` parameter
 
-NARS-Datalog KB structure (`z3adapter/ikr/nars_datalog/kb/`):
-```json
-{
-  "name": "psychology",
-  "rules": [{
-    "name": "fear_causes_avoidance",
-    "antecedent": {"predicate": "fears", "arguments": ["P", "X"]},
-    "consequent": {"predicate": "avoids", "arguments": ["P", "X"]},
-    "truth_value": {"frequency": 0.85, "confidence": 0.8}
-  }]
-}
+### Triple Extraction Pipeline (Planned)
+
+A text-to-triples extraction pipeline for knowledge extraction from books and documents. Design follows Wikidata's philosophy: **predicates are fixed schema, entities emerge from content**.
+
+**7 Generic Predicates:**
+```python
+PREDICATES = [
+    "is_a",        # Taxonomy: X is a type of Y
+    "part_of",     # Structure: X is part of Y
+    "has",         # Attributes: X has property Y
+    "causes",      # Causation: X causes Y
+    "prevents",    # Negative causation: X prevents Y
+    "believes",    # Epistemic: X believes Y
+    "related_to",  # Catch-all: X relates to Y
+]
 ```
+
+**Triple Structure:**
+```python
+@dataclass
+class Triple:
+    id: str                    # Unique ID ("t1", "t2", ...)
+    subject: str               # Entity or triple reference ("t:t1")
+    predicate: str             # One of 7 predicates
+    object: str                # Entity or triple reference
+    negated: bool = False      # "X does NOT predicate Y"
+    truth: TruthValue | None   # NARS uncertainty
+    source: str | None         # Provenance ("Zimbardo 2017 p.42")
+    surface_form: str | None   # Original text
+```
+
+**Key Design Decisions:**
+- **No domain-specific KB**: Vocabulary emerges from text + LLM common sense
+- **Triple references**: `t:` prefix enables multi-level beliefs (reification)
+- **Entity resolution**: Fuzzy matching is the core challenge (not predicate classification)
+- **NARS truth values**: Uncertainty propagation throughout
+
+**Planned File Structure:**
+```
+z3adapter/ikr/triples/
+├── schema.py           # Triple, TripleStore, Predicate
+├── extractor.py        # LLM-based triple extraction
+├── entity_resolver.py  # Fuzzy entity matching
+├── verification.py     # Fuzzy-NARS bridge
+├── storage.py          # SQLite persistence
+└── pipeline.py         # End-to-end extraction pipeline
+```
+
+See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for full implementation plan.
 
 ### Error Handling
 - Failed generations trigger retry with error feedback
