@@ -423,13 +423,33 @@ souffle -F facts_dir -D output_dir program.dl
 
 ### Usage
 
+**High-Level API (Recommended):**
+```python
+from z3adapter.reasoning import ProofOfThought
+
+# Initialize with Souffle backend (requires Souffle installed)
+pot = ProofOfThought(
+    llm_client=client,
+    model="gpt-4o",
+    backend="souffle",
+    ikr_two_stage=True,  # Uses IKR generation (default)
+    souffle_path="/custom/path/to/souffle",  # Optional: custom path
+)
+
+# Query naturally
+result = pot.query("Would a vegetarian eat a plant burger?")
+print(result.answer)   # True (derivable) or False (not derivable)
+print(result.success)  # True if execution succeeded
+```
+
+**Low-Level Backend API:**
 ```python
 from z3adapter.backends import SouffleBackend
 
 # Initialize (requires Souffle installed)
 backend = SouffleBackend()
 
-# Execute an IKR JSON file
+# Execute an IKR JSON file directly
 result = backend.execute("path/to/ikr.json")
 
 print(result.answer)   # True (derivable) or False (not derivable)
@@ -535,21 +555,19 @@ if backend == "json":
 elif backend == "ikr":
     from z3adapter.backends.ikr_backend import IKRBackend
     backend_instance = IKRBackend(verify_timeout, z3_path)
+elif backend == "souffle":
+    from z3adapter.backends.souffle_backend import SouffleBackend
+    from z3adapter.runners import OfficialSouffleRunner
+    runner = OfficialSouffleRunner(souffle_path=souffle_path)
+    backend_instance = SouffleBackend(verify_timeout, runner=runner)
 else:  # smt2
     from z3adapter.backends.smt2_backend import SMT2Backend
     backend_instance = SMT2Backend(verify_timeout, z3_path)
 ```
 
-**File:** `z3adapter/reasoning/proof_of_thought.py:94-108`
+**File:** `z3adapter/reasoning/proof_of_thought.py:121-141`
 
-**Note:** The Souffle backend is currently used directly rather than through `ProofOfThought`:
-
-```python
-from z3adapter.backends import SouffleBackend
-
-backend = SouffleBackend()
-result = backend.execute("path/to/ikr.json")
-```
+**Note:** The Souffle backend uses the same IKR generation as the IKR backend, so `generator_backend` is mapped to `"ikr"` internally when `backend="souffle"`.
 
 ## Prompt Selection
 

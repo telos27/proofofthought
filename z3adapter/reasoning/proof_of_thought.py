@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-BackendType = Literal["json", "smt2", "ikr"]
+BackendType = Literal["json", "smt2", "ikr", "souffle"]
 
 
 @dataclass
@@ -63,6 +63,7 @@ class ProofOfThought:
         optimize_timeout: int = 100000,
         cache_dir: str | None = None,
         z3_path: str = "z3",
+        souffle_path: str | None = None,
         postprocessors: Sequence[str | Postprocessor] | None = None,
         postprocessor_configs: dict[str, dict] | None = None,
         ikr_two_stage: bool = True,
@@ -72,15 +73,16 @@ class ProofOfThought:
         Args:
             llm_client: LLM client (OpenAI, AzureOpenAI, Anthropic, etc.)
             model: LLM model/deployment name (default: "gpt-5")
-            backend: Execution backend ("json", "smt2", or "ikr", default: "smt2")
+            backend: Execution backend ("json", "smt2", "ikr", or "souffle", default: "smt2")
             max_attempts: Maximum retry attempts for program generation
-            verify_timeout: Z3 verification timeout in milliseconds
+            verify_timeout: Z3/Souffle verification timeout in milliseconds
             optimize_timeout: Z3 optimization timeout in milliseconds
             cache_dir: Directory to cache generated programs (None = temp dir)
-            z3_path: Path to Z3 executable (for SMT2 backend)
+            z3_path: Path to Z3 executable (for SMT2/IKR backends)
+            souffle_path: Path to Souffle executable (for Souffle backend, None = search PATH)
             postprocessors: List of postprocessor names or instances to apply
             postprocessor_configs: Configuration for postprocessors (if names provided)
-            ikr_two_stage: For IKR backend, use two-stage prompting (default True).
+            ikr_two_stage: For IKR/Souffle backends, use two-stage prompting (default True).
                 Stage 1 extracts explicit knowledge, Stage 2 generates background knowledge.
 
         Example with postprocessors:
@@ -96,11 +98,24 @@ class ProofOfThought:
             ...     backend="ikr",
             ...     ikr_two_stage=True  # default
             ... )
+
+        Example with Souffle backend:
+            >>> pot = ProofOfThought(
+            ...     llm_client=client,
+            ...     backend="souffle",
+            ...     ikr_two_stage=True  # uses IKR generation, then compiles to Datalog
+            ... )
         """
         self.backend_type = backend
         self.llm_client = llm_client
+
+        # Souffle uses IKR generation format, so map it to "ikr" for the generator
+        generator_backend = "ikr" if backend == "souffle" else backend
         self.generator = Z3ProgramGenerator(
-            llm_client=llm_client, model=model, backend=backend, ikr_two_stage=ikr_two_stage
+            llm_client=llm_client,
+            model=model,
+            backend=generator_backend,
+            ikr_two_stage=ikr_two_stage,
         )
 
         # Initialize appropriate backend (import here to avoid circular imports)
@@ -114,6 +129,12 @@ class ProofOfThought:
             from z3adapter.backends.ikr_backend import IKRBackend
 
             backend_instance = IKRBackend(verify_timeout=verify_timeout, z3_path=z3_path)
+        elif backend == "souffle":
+            from z3adapter.backends.souffle_backend import SouffleBackend
+            from z3adapter.runners import OfficialSouffleRunner
+
+            runner = OfficialSouffleRunner(souffle_path=souffle_path)
+            backend_instance = SouffleBackend(verify_timeout=verify_timeout, runner=runner)
         else:  # smt2
             from z3adapter.backends.smt2_backend import SMT2Backend
 
@@ -237,7 +258,7 @@ class ProofOfThought:
 
                 # Write program to file (format depends on backend)
                 with open(program_file_path, "w") as f:
-                    if self.backend_type in ("json", "ikr"):
+                    if self.backend_type in ("json", "ikr", "souffle"):
                         json.dump(gen_result.program, f, indent=2)
                     else:  # smt2
                         f.write(gen_result.program)  # type: ignore
