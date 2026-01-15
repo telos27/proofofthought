@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2026
 
 ### Added
+- **Fuzzy-NARS Verification**: Similarity-based triple verification with NARS evidence combination
+  - Fuzzy term matching (Levenshtein, Jaccard, embeddings)
+  - Predicate polarity detection (causes↔prevents, increases↔decreases)
+  - NARS revision for combining evidence from multiple KB matches
+  - Verification verdicts: SUPPORTED, CONTRADICTED, INSUFFICIENT
+  - `VerificationTriple`, `verify_triple`, `verify_answer` API
 - **IKR Backend**: Intermediate Knowledge Representation for improved SMT generation
   - Structured schema: types, entities, relations, facts, rules, query
   - Deterministic compilation to SMT2 (eliminates syntax errors)
@@ -28,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for Souffle compiler, runner, and backend
 
 ### Changed
+- `TruthValue` now has `to_evidence()` method for NARS evidence pooling
 - `ProofOfThought` now accepts `backend="ikr"` option
 - `Z3ProgramGenerator` supports IKR extraction from LLM responses
 - IKR backend uses two-stage prompting by default (set `ikr_two_stage=False` for single-stage)

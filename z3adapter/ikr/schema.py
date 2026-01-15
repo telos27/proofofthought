@@ -134,6 +134,27 @@ class TruthValue(BaseModel):
         """Return negated truth value (frequency inverted, confidence preserved)."""
         return TruthValue(frequency=1.0 - self.frequency, confidence=self.confidence)
 
+    def to_evidence(self, k: float = 1.0) -> tuple[float, float]:
+        """Convert truth value back to evidence counts.
+
+        Inverse of from_evidence(). Useful for NARS revision operations
+        that need to pool evidence from multiple sources.
+
+        Args:
+            k: Evidential horizon constant (must match from_evidence)
+
+        Returns:
+            (positive_evidence, total_evidence) tuple
+        """
+        if self.confidence >= 0.999:
+            # Near-maximum confidence = very large evidence
+            return (float("inf"), float("inf"))
+
+        # c = w/(w+k) → w = ck/(1-c)
+        total = self.confidence * k / (1 - self.confidence)
+        positive = self.frequency * total
+        return (positive, total)
+
     def expectation(self) -> float:
         """Return expected truth value (frequency * confidence + 0.5 * (1 - confidence))."""
         return self.frequency * self.confidence + 0.5 * (1 - self.confidence)

@@ -486,6 +486,125 @@ Add JSON files to `z3adapter/ikr/kb/`:
 }
 ```
 
+#### Fuzzy-NARS Verification
+
+The IKR module includes a standalone verification system that combines fuzzy matching with NARS evidence combination. This enables verifying answers against a knowledge base without requiring exact symbolic matching.
+
+**Implementation:** `z3adapter/ikr/fuzzy_nars.py`
+
+**Key capabilities:**
+- **Fuzzy term matching:** "phobias" matches "phobia", "anxiety_disorders" matches "anxiety_disorder"
+- **Predicate polarity:** Detects contradictions between opposite predicates (causes↔prevents)
+- **NARS revision:** Combines evidence from multiple matching KB triples
+- **Verification verdicts:** SUPPORTED, CONTRADICTED, or INSUFFICIENT
+
+**Basic usage:**
+
+```python
+from z3adapter.ikr import (
+    VerificationTriple,
+    TruthValue,
+    verify_triple,
+    verify_answer,
+    combined_lexical_similarity,
+    VerificationVerdict,
+)
+
+# Build a knowledge base
+kb = [
+    VerificationTriple("phobia", "is_a", "anxiety_disorder", TruthValue(1.0, 0.9)),
+    VerificationTriple("stress", "causes", "cortisol_release", TruthValue(0.95, 0.9)),
+    VerificationTriple("relaxation", "prevents", "stress", TruthValue(0.9, 0.85)),
+]
+
+# Verify with fuzzy matching
+query = VerificationTriple("phobias", "is_a", "disorder")
+result = verify_triple(query, kb, combined_lexical_similarity)
+print(result.verdict)       # VerificationVerdict.SUPPORTED
+print(result.explanation)   # "Evidence supports claim (f=1.000, c=0.XXX)"
+print(len(result.matches))  # Number of matching KB triples
+
+# Detect contradictions via predicate polarity
+query2 = VerificationTriple("relaxation", "causes", "stress")
+result2 = verify_triple(query2, kb, combined_lexical_similarity)
+print(result2.verdict)  # VerificationVerdict.CONTRADICTED
+# "causes" is opposite of "prevents" -> frequency inverted
+```
+
+**Verify multiple answer triples:**
+
+```python
+answer_triples = [
+    VerificationTriple("phobia", "is_a", "anxiety_disorder"),
+    VerificationTriple("stress", "causes", "cortisol_release"),
+    VerificationTriple("gravity", "causes", "falling"),  # No evidence
+]
+
+result = verify_answer(answer_triples, kb, combined_lexical_similarity)
+print(result["summary"]["overall_verdict"])  # Overall result
+print(result["summary"]["supported"])        # Count of supported triples
+print(result["summary"]["contradicted"])     # Count of contradicted triples
+print(result["summary"]["insufficient"])     # Count with insufficient evidence
+```
+
+**Similarity functions:**
+
+| Function | Description |
+|----------|-------------|
+| `lexical_similarity` | Normalized Levenshtein distance |
+| `jaccard_word_similarity` | Word overlap (Jaccard index) |
+| `combined_lexical_similarity` | Max of Levenshtein and Jaccard |
+| `make_embedding_similarity` | Factory for embedding-based similarity |
+| `make_hybrid_similarity` | Lexical + embedding hybrid |
+
+**Predicate opposites:**
+
+The system automatically detects semantic opposites:
+```python
+PREDICATE_OPPOSITES = {
+    "causes": "prevents",
+    "increases": "decreases",
+    "enables": "inhibits",
+    "supports": "contradicts",
+    "requires": "excludes",
+    "is": "is_not",
+    "has": "lacks",
+    ...
+}
+```
+
+When a query predicate is opposite to a KB predicate, the frequency is inverted (e.g., `f=0.9` becomes `f=0.1`), resulting in a CONTRADICTED verdict.
+
+**NARS evidence combination:**
+
+When multiple KB triples match a query, their evidence is pooled using NARS revision:
+
+```python
+from z3adapter.ikr import revise, revise_multiple, TruthValue
+
+t1 = TruthValue(frequency=0.9, confidence=0.5)
+t2 = TruthValue(frequency=0.8, confidence=0.5)
+
+combined = revise(t1, t2)
+# Result: Higher confidence than either input (more evidence)
+# Frequency: Weighted average based on evidence amounts
+
+# Combine multiple sources
+truths = [t1, t2, TruthValue(frequency=0.85, confidence=0.6)]
+combined = revise_multiple(truths)
+```
+
+**Comparison with Z3 soft constraints:**
+
+| Aspect | Z3 Soft Constraints | Fuzzy-NARS |
+|--------|---------------------|------------|
+| Term matching | Exact symbolic | Fuzzy (lexical/semantic) |
+| Output | Single model | Verdict + explanation |
+| Contradiction | Implicit (weight balance) | Explicit (polarity detection) |
+| Evidence combination | MaxSAT | NARS revision |
+
+Both approaches are available in IKR. Use Z3 soft constraints for satisfiability checking with preferences; use Fuzzy-NARS for explicit answer verification against a knowledge base.
+
 ## Souffle Backend
 
 The Souffle backend compiles IKR to Datalog and executes via the [Souffle](https://souffle-lang.github.io/) Datalog engine. This provides an alternative execution semantics based on **derivability** rather than **satisfiability**.

@@ -217,6 +217,7 @@ IKR extended features (for commonsense reasoning):
 - **Uncertainty**: NARS-style truth values with frequency/confidence
 - **Epistemic contexts**: "A believes B believes C" with possible worlds
 - **Knowledge base modules**: Reusable commonsense rules (`food`, `social`)
+- **Fuzzy-NARS verification**: Similarity-based triple verification with evidence pooling
 
 ```python
 # IKR with uncertainty
@@ -236,6 +237,31 @@ fact = Fact(
 # Knowledge base modules
 from z3adapter.ikr.knowledge_base import KnowledgeBase
 merged = KnowledgeBase.merge_into_ikr(ikr_data, ['food', 'social'])
+
+# Fuzzy-NARS verification (verify answers against KB with fuzzy matching)
+from z3adapter.ikr import (
+    VerificationTriple, TruthValue,
+    verify_triple, combined_lexical_similarity, VerificationVerdict
+)
+
+kb = [
+    VerificationTriple("phobia", "is_a", "anxiety_disorder", TruthValue(1.0, 0.9)),
+    VerificationTriple("stress", "prevents", "relaxation", TruthValue(0.9, 0.85)),
+]
+
+# Fuzzy matching: "phobias" matches "phobia"
+result = verify_triple(
+    VerificationTriple("phobias", "is_a", "disorder"),
+    kb, combined_lexical_similarity
+)
+print(result.verdict)  # VerificationVerdict.SUPPORTED
+
+# Polarity detection: "causes" contradicts "prevents"
+result2 = verify_triple(
+    VerificationTriple("stress", "causes", "relaxation"),
+    kb, combined_lexical_similarity
+)
+print(result2.verdict)  # VerificationVerdict.CONTRADICTED
 ```
 
 ### Error Handling

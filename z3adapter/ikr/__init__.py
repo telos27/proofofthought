@@ -27,19 +27,58 @@ from z3adapter.ikr.schema import (
     Relation,
     Rule,
     Type,
+    TruthValue,
 )
 from z3adapter.ikr.compiler import IKRCompiler
 from z3adapter.ikr.souffle_compiler import IKRSouffleCompiler, SouffleProgram
+from z3adapter.ikr.fuzzy_nars import (
+    VerificationTriple,
+    UnificationResult,
+    VerificationVerdict,
+    VerificationResult,
+    PREDICATE_OPPOSITES,
+    get_predicate_polarity,
+    lexical_similarity,
+    jaccard_word_similarity,
+    combined_lexical_similarity,
+    make_embedding_similarity,
+    make_hybrid_similarity,
+    fuzzy_nars_unify,
+    revise,
+    revise_multiple,
+    verify_triple,
+    verify_answer,
+)
 
 __all__ = [
+    # Schema
     "IKR",
-    "IKRCompiler",
-    "IKRSouffleCompiler",
-    "SouffleProgram",
     "Type",
     "Entity",
     "Relation",
     "Fact",
     "Rule",
     "Query",
+    "TruthValue",
+    # Compilers
+    "IKRCompiler",
+    "IKRSouffleCompiler",
+    "SouffleProgram",
+    # Fuzzy-NARS verification
+    "VerificationTriple",
+    "UnificationResult",
+    "VerificationVerdict",
+    "VerificationResult",
+    "PREDICATE_OPPOSITES",
+    "get_predicate_polarity",
+    "lexical_similarity",
+    "jaccard_word_similarity",
+    "combined_lexical_similarity",
+    "make_embedding_similarity",
+    "make_hybrid_similarity",
+    "fuzzy_nars_unify",
+    "revise",
+    "revise_multiple",
+    "verify_triple",
+    "verify_answer",
 ]
