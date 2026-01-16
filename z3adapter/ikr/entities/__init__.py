@@ -11,6 +11,8 @@ Key components:
 - VectorIndex: FAISS-based ANN search for entity resolution (optional, requires faiss-cpu)
 - EntityLinker: Multi-level entity resolution with linking
 - PrecomputationPipeline: Batch pre-computation of embeddings and links
+- QueryExpander: Expand queries using entity similarity links
+- QueryEngine: Full query pipeline with expansion, matching, and evidence combination
 """
 
 from z3adapter.ikr.entities.schema import (
@@ -23,6 +25,19 @@ from z3adapter.ikr.entities.schema import (
 from z3adapter.ikr.entities.store import EntityStore
 from z3adapter.ikr.entities.linker import EntityLinker, LinkResult
 from z3adapter.ikr.entities.precompute import PrecomputationPipeline, PrecomputationStats
+from z3adapter.ikr.entities.query_expander import (
+    ExpandedPattern,
+    QueryExpander,
+    QueryTriple,
+    PREDICATE_SIMILARITY,
+)
+from z3adapter.ikr.entities.query_engine import (
+    EvidenceCombiner,
+    PatternMatch,
+    PatternMatcher,
+    QueryEngine,
+    QueryResult,
+)
 
 __all__ = [
     "Entity",
@@ -30,10 +45,19 @@ __all__ = [
     "EntityLink",
     "EntityLinker",
     "EntityStore",
+    "EvidenceCombiner",
+    "ExpandedPattern",
     "LinkResult",
     "LinkType",
+    "PatternMatch",
+    "PatternMatcher",
+    "PREDICATE_SIMILARITY",
     "PrecomputationPipeline",
     "PrecomputationStats",
+    "QueryEngine",
+    "QueryExpander",
+    "QueryResult",
+    "QueryTriple",
     "SurfaceForm",
 ]
 

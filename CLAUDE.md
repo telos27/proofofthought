@@ -514,8 +514,6 @@ Query → Entity Resolution → Query Expansion → Symbolic Match → Result
 - `VectorIndex`: FAISS-based ANN search for fast similarity lookup
 - `EntityLinker`: Multi-level resolution (exact → surface form → vector)
 - `PrecomputationPipeline`: Batch embedding and link computation
-
-**Planned Components:**
 - `QueryExpander`: Expand queries via similarity links
 
 **Usage Example (Phase 1 - Entity Storage):**
@@ -660,6 +658,111 @@ def on_progress(operation: str, current: int, total: int):
 
 pipeline.progress_callback = on_progress
 pipeline.run_full_pipeline()
+```
+
+**Usage Example (Phase 5 - QueryExpander):**
+```python
+from z3adapter.ikr.entities import (
+    Entity, EntityLink, EntityStore, LinkType,
+    QueryExpander, QueryTriple, ExpandedPattern,
+)
+from z3adapter.ikr.triples import Predicate
+
+# Setup store with entities and links
+store = EntityStore("knowledge.db")
+store.add(Entity(id="e1", name="anxiety", entity_type="emotion"))
+store.add(Entity(id="e2", name="stress", entity_type="state"))
+store.add(Entity(id="e3", name="memory", entity_type="cognitive"))
+store.add(Entity(id="e4", name="working_memory", entity_type="cognitive"))
+
+# Add similarity links
+store.add_link(EntityLink(source_id="e1", target_id="e2", link_type=LinkType.SIMILAR_TO, score=0.85))
+store.add_link(EntityLink(source_id="e3", target_id="e4", link_type=LinkType.SIMILAR_TO, score=0.80))
+
+# Create expander
+expander = QueryExpander(store, min_score=0.5, max_expansions=20)
+
+# Expand a query
+query = QueryTriple(
+    subject_id="e1", subject_name="anxiety",
+    predicate=Predicate.CAUSES,
+    object_id="e3", object_name="memory",
+)
+patterns = expander.expand(query)
+
+# Patterns returned (sorted by confidence):
+#   (anxiety, causes, memory)         conf=1.0  (original)
+#   (anxiety, causes, working_memory) conf=0.80
+#   (stress, causes, memory)          conf=0.85
+#   (stress, causes, working_memory)  conf=0.68
+
+for p in patterns:
+    print(f"({p.subject_name}, {p.predicate.value}, {p.object_name}) conf={p.confidence:.2f}")
+
+# Convenience method: expand by entity names
+patterns = expander.expand_by_name("chronic_stress", Predicate.CAUSES, "memory_impairment")
+
+# Generate opposite patterns for contradiction detection
+opposites = expander.get_opposite_patterns(patterns)
+# (anxiety, prevents, memory) etc.
+```
+
+**Usage Example (Phase 6 - QueryEngine):**
+```python
+from z3adapter.ikr.entities import (
+    Entity, EntityLink, EntityStore, LinkType,
+    QueryEngine, QueryResult,
+)
+from z3adapter.ikr.triples import Predicate, Triple, TripleStore
+from z3adapter.ikr.fuzzy_nars import VerificationVerdict
+
+# Setup stores
+entity_store = EntityStore("knowledge.db")
+triple_store = TripleStore()
+
+# Add entities and links
+entity_store.add(Entity(id="e1", name="stress", entity_type="state"))
+entity_store.add(Entity(id="e2", name="chronic_stress", entity_type="state"))
+entity_store.add(Entity(id="e3", name="anxiety", entity_type="emotion"))
+entity_store.add_link(EntityLink(
+    source_id="e1", target_id="e2",
+    link_type=LinkType.SIMILAR_TO, score=0.85
+))
+
+# Add knowledge triples
+triple_store.add(Triple(
+    id="t1", subject="chronic_stress",
+    predicate=Predicate.CAUSES, object="anxiety",
+    subject_id="e2", object_id="e3"
+))
+triple_store.add(Triple(
+    id="t2", subject="exercise",
+    predicate=Predicate.PREVENTS, object="stress"
+))
+
+# Create query engine
+engine = QueryEngine(
+    entity_store, triple_store,
+    min_expansion_score=0.5,
+    match_threshold=0.4,
+)
+
+# Query 1: Direct match
+result = engine.query("chronic_stress", Predicate.CAUSES, "anxiety")
+print(result.verdict)  # SUPPORTED
+
+# Query 2: Match via entity expansion (stress ~ chronic_stress)
+result = engine.query("stress", Predicate.CAUSES, "anxiety")
+print(result.verdict)  # SUPPORTED (found via expansion)
+
+# Query 3: Contradiction detection
+result = engine.query("exercise", Predicate.CAUSES, "stress")
+print(result.verdict)  # CONTRADICTED (exercise PREVENTS stress)
+
+# Verify an existing triple
+query_triple = Triple(id="q1", subject="stress", predicate=Predicate.CAUSES, object="anxiety")
+result = engine.verify(query_triple)
+print(f"Verdict: {result.verdict}, Confidence: {result.combined_truth.confidence:.2f}")
 ```
 
 See `.claude/sessions/2026-01-16-link-based-architecture-design.md` for full design.
