@@ -46,6 +46,7 @@ class Triple:
     Subject and object can reference:
     - Entities: bare strings like "stress", "memory"
     - Other triples: prefixed with "t:" like "t:t1"
+    - Entity IDs: via subject_id/object_id for linked storage
 
     Example:
         # Simple fact
@@ -56,12 +57,22 @@ class Triple:
 
         # Negated fact
         Triple(id="t3", subject="exercise", predicate=Predicate.CAUSES, object="stress", negated=True)
+
+        # With entity IDs (for link-based architecture)
+        Triple(
+            id="t4",
+            subject="chronic_stress",
+            predicate=Predicate.CAUSES,
+            object="anxiety",
+            subject_id="abc123",  # References Entity.id
+            object_id="def456",   # References Entity.id
+        )
     """
 
     id: str  # Unique ID (e.g., "t1", "t2")
-    subject: str  # Entity or triple reference (t:xxx)
+    subject: str  # Entity name or triple reference (t:xxx)
     predicate: Predicate  # One of 7 predicates
-    object: str  # Entity or triple reference (t:xxx)
+    object: str  # Entity name or triple reference (t:xxx)
 
     # Negation
     negated: bool = False  # "X does NOT predicate Y"
@@ -72,6 +83,10 @@ class Triple:
     # Provenance
     source: Optional[str] = None  # "Zimbardo 2017 p.42"
     surface_form: Optional[str] = None  # Original text
+
+    # Entity IDs for link-based architecture (optional)
+    subject_id: Optional[str] = None  # References Entity.id
+    object_id: Optional[str] = None  # References Entity.id
 
     @staticmethod
     def is_triple_reference(ref: str) -> bool:

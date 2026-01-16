@@ -43,6 +43,9 @@ proofofthought/
 │   │   │   ├── rule.py        # Rule compilation
 │   │   │   └── kb_loader.py   # KB module loader
 │   │   ├── triples/           # Triple extraction pipeline
+│   │   ├── entities/          # Entity storage for link-based architecture
+│   │   │   ├── schema.py      # Entity, EntityLink, LinkType
+│   │   │   └── store.py       # EntityStore (SQLite backend)
 │   │   ├── fuzzy_nars.py      # Fuzzy-NARS verification
 │   │   └── schema.py          # IKR Pydantic schema
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
@@ -479,7 +482,7 @@ z3adapter/ikr/triples/
 
 See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for design decisions.
 
-### Link-Based Architecture (Planned)
+### Link-Based Architecture
 
 The next evolution of the triple extraction pipeline uses **entity linking** instead of entity merging for large-scale commonsense reasoning.
 
@@ -503,12 +506,52 @@ Text → LLM Extract → Entity Linker → Stored Triples
 Query → Entity Resolution → Query Expansion → Symbolic Match → Result
 ```
 
-**New Components (planned):**
-- `EntityStore`: Entities with external IDs (Wikidata QIDs)
+**Implemented Components:**
+- `Entity`: Knowledge graph nodes with canonical names, types, external IDs
+- `EntityLink`: Pre-computed similarity links between entities
+- `EntityStore`: SQLite-backed storage for entities, links, surface forms, embeddings
+
+**Planned Components:**
 - `VectorIndex`: FAISS-based ANN search
 - `EntityLinker`: Multi-level resolution (exact → surface form → vector)
 - `QueryExpander`: Expand queries via similarity links
 - `PrecomputationPipeline`: Batch embedding and link computation
+
+**Usage Example (Phase 1 - Entity Storage):**
+```python
+from z3adapter.ikr.entities import Entity, EntityLink, EntityStore, LinkType
+
+# Create store (in-memory or persistent)
+store = EntityStore("knowledge.db")  # or EntityStore() for in-memory
+
+# Add entities
+anxiety = Entity(name="anxiety", entity_type="emotion")
+stress = Entity(name="stress", entity_type="state")
+store.add(anxiety)
+store.add(stress)
+
+# Add similarity link
+link = EntityLink(
+    source_id=anxiety.id,
+    target_id=stress.id,
+    link_type=LinkType.SIMILAR_TO,
+    score=0.75,
+    method="embedding"
+)
+store.add_link(link)
+
+# Query similar entities
+similar = store.get_similar(anxiety.id, min_score=0.5)
+for entity, score in similar:
+    print(f"{entity.name}: {score}")
+
+# Add surface form for O(1) lookup
+store.add_surface_form("nervousness", anxiety.id, 0.9)
+result = store.lookup_surface_form("nervousness")  # Returns (entity_id, score)
+
+# Store embeddings
+store.save_embedding(anxiety.id, [0.1, 0.2, ...], model="text-embedding-3-small")
+```
 
 See `.claude/sessions/2026-01-16-link-based-architecture-design.md` for full design.
 
