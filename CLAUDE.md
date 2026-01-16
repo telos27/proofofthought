@@ -512,11 +512,11 @@ Query → Entity Resolution → Query Expansion → Symbolic Match → Result
 - `EntityLink`: Pre-computed similarity links between entities
 - `EntityStore`: SQLite-backed storage for entities, links, surface forms, embeddings
 - `VectorIndex`: FAISS-based ANN search for fast similarity lookup
+- `EntityLinker`: Multi-level resolution (exact → surface form → vector)
+- `PrecomputationPipeline`: Batch embedding and link computation
 
 **Planned Components:**
-- `EntityLinker`: Multi-level resolution (exact → surface form → vector)
 - `QueryExpander`: Expand queries via similarity links
-- `PrecomputationPipeline`: Batch embedding and link computation
 
 **Usage Example (Phase 1 - Entity Storage):**
 ```python
@@ -584,6 +584,82 @@ results = index.search_batch([query1, query2, query3], k=5)
 # Persistence
 index.save("my_index")  # Creates .index and .idmap files
 index.load("my_index")  # Restore later
+```
+
+**Usage Example (Phase 3 - EntityLinker):**
+```python
+from z3adapter.ikr.entities import EntityStore, EntityLinker, VectorIndex, LinkResult
+
+store = EntityStore("knowledge.db")
+index = VectorIndex(dimension=1536)
+
+def embed_fn(text: str) -> list[float]:
+    return openai.embeddings.create(input=text, model="text-embedding-3-small").data[0].embedding
+
+linker = EntityLinker(
+    entity_store=store,
+    vector_index=index,
+    embed_fn=embed_fn,
+    link_threshold=0.5,      # Create links above this score
+    identity_threshold=0.9,  # Use existing entity above this score
+)
+
+# Link a mention to an entity
+result = linker.link("working memory")
+
+if result.is_new:
+    # New entity created - persist it
+    store.add(result.entity)
+    for link in result.links:
+        store.add_link(link)
+else:
+    print(f"Resolved to: {result.entity.name}")
+    print(f"Method: {result.resolution_method}")  # "exact", "surface_form", "vector_high"
+
+# Or use convenience method (auto-persists)
+result = linker.link_and_store("cognitive load", entity_type="concept")
+```
+
+**Usage Example (Phase 4 - PrecomputationPipeline):**
+```python
+from z3adapter.ikr.entities import EntityStore, VectorIndex, PrecomputationPipeline
+
+store = EntityStore("knowledge.db")
+index = VectorIndex(dimension=1536)
+
+def batch_embed(texts: list[str]) -> list[list[float]]:
+    response = openai.embeddings.create(input=texts, model="text-embedding-3-small")
+    return [d.embedding for d in response.data]
+
+pipeline = PrecomputationPipeline(
+    entity_store=store,
+    vector_index=index,
+    batch_embed_fn=batch_embed,
+    model_name="text-embedding-3-small",
+)
+
+# Run full pipeline
+stats = pipeline.run_full_pipeline(
+    embedding_batch_size=100,
+    link_k=50,
+    link_min_score=0.5,
+    index_path="knowledge_index",
+)
+
+print(f"Embeddings computed: {stats.embeddings_computed}")
+print(f"Links created: {stats.links_created}")
+
+# Or run stages individually
+pipeline.compute_embeddings(batch_size=100)
+pipeline.rebuild_vector_index(index_path="my_index")
+pipeline.compute_links(k=50, min_score=0.5)
+
+# With progress callback
+def on_progress(operation: str, current: int, total: int):
+    print(f"{operation}: {current}/{total}")
+
+pipeline.progress_callback = on_progress
+pipeline.run_full_pipeline()
 ```
 
 See `.claude/sessions/2026-01-16-link-based-architecture-design.md` for full design.

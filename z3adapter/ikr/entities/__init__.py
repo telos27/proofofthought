@@ -9,6 +9,8 @@ Key components:
 - EntityLink: Pre-computed similarity between entities
 - EntityStore: SQLite-backed storage for entities and links
 - VectorIndex: FAISS-based ANN search for entity resolution (optional, requires faiss-cpu)
+- EntityLinker: Multi-level entity resolution with linking
+- PrecomputationPipeline: Batch pre-computation of embeddings and links
 """
 
 from z3adapter.ikr.entities.schema import (
@@ -19,13 +21,19 @@ from z3adapter.ikr.entities.schema import (
     SurfaceForm,
 )
 from z3adapter.ikr.entities.store import EntityStore
+from z3adapter.ikr.entities.linker import EntityLinker, LinkResult
+from z3adapter.ikr.entities.precompute import PrecomputationPipeline, PrecomputationStats
 
 __all__ = [
     "Entity",
     "EntityEmbedding",
     "EntityLink",
+    "EntityLinker",
     "EntityStore",
+    "LinkResult",
     "LinkType",
+    "PrecomputationPipeline",
+    "PrecomputationStats",
     "SurfaceForm",
 ]
 
