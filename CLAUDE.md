@@ -45,7 +45,8 @@ proofofthought/
 │   │   ├── triples/           # Triple extraction pipeline
 │   │   ├── entities/          # Entity storage for link-based architecture
 │   │   │   ├── schema.py      # Entity, EntityLink, LinkType
-│   │   │   └── store.py       # EntityStore (SQLite backend)
+│   │   │   ├── store.py       # EntityStore (SQLite backend)
+│   │   │   └── vector_index.py # VectorIndex (FAISS ANN search)
 │   │   ├── fuzzy_nars.py      # Fuzzy-NARS verification
 │   │   └── schema.py          # IKR Pydantic schema
 │   ├── postprocessors/        # Enhancement techniques (self-refine, etc.)
@@ -510,9 +511,9 @@ Query → Entity Resolution → Query Expansion → Symbolic Match → Result
 - `Entity`: Knowledge graph nodes with canonical names, types, external IDs
 - `EntityLink`: Pre-computed similarity links between entities
 - `EntityStore`: SQLite-backed storage for entities, links, surface forms, embeddings
+- `VectorIndex`: FAISS-based ANN search for fast similarity lookup
 
 **Planned Components:**
-- `VectorIndex`: FAISS-based ANN search
 - `EntityLinker`: Multi-level resolution (exact → surface form → vector)
 - `QueryExpander`: Expand queries via similarity links
 - `PrecomputationPipeline`: Batch embedding and link computation
@@ -551,6 +552,38 @@ result = store.lookup_surface_form("nervousness")  # Returns (entity_id, score)
 
 # Store embeddings
 store.save_embedding(anxiety.id, [0.1, 0.2, ...], model="text-embedding-3-small")
+```
+
+**Usage Example (Phase 2 - Vector Index):**
+```python
+from z3adapter.ikr.entities import VectorIndex
+
+# Create index (dimension matches your embedding model)
+index = VectorIndex(dimension=1536)  # OpenAI text-embedding-3-small
+
+# Build from embedding dict
+embeddings = {
+    "anxiety": [...],  # 1536-dim vector
+    "stress": [...],
+    "fear": [...],
+}
+index.build(embeddings)  # Uses IVF for large datasets, flat for small
+
+# Search for similar entities
+query_embedding = [...]  # Query vector
+results = index.search(query_embedding, k=10)
+for entity_id, score in results:
+    print(f"{entity_id}: {score:.3f}")  # Cosine similarity in [0, 1]
+
+# Incremental add
+index.add("new_entity", new_embedding)
+
+# Batch search (more efficient)
+results = index.search_batch([query1, query2, query3], k=5)
+
+# Persistence
+index.save("my_index")  # Creates .index and .idmap files
+index.load("my_index")  # Restore later
 ```
 
 See `.claude/sessions/2026-01-16-link-based-architecture-design.md` for full design.
