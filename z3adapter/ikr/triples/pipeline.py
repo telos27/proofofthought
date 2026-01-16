@@ -175,7 +175,7 @@ class ExtractionPipeline:
         entity_threshold: float = 0.8,
         resolve_entities: bool = True,
     ) -> "ExtractionPipeline":
-        """Factory method to create a pipeline.
+        """Factory method to create a pipeline with lexical similarity.
 
         Args:
             llm_client: OpenAI-compatible LLM client
@@ -199,6 +199,91 @@ class ExtractionPipeline:
             storage=storage,
             resolve_entities=resolve_entities,
             auto_persist=db_path is not None,
+        )
+
+    @classmethod
+    def create_with_embeddings(
+        cls,
+        llm_client: LLMClient,
+        model: str = "gpt-4o",
+        db_path: Optional[str] = None,
+        entity_threshold: float = 0.7,
+        resolve_entities: bool = True,
+        use_mock_embeddings: bool = False,
+        use_hybrid: bool = False,
+        lexical_weight: float = 0.3,
+    ) -> "ExtractionPipeline":
+        """Factory method to create a pipeline with embedding-based similarity.
+
+        Creates a pipeline that uses semantic embeddings for entity resolution,
+        providing better matching for synonyms and related terms.
+
+        Args:
+            llm_client: OpenAI-compatible LLM client
+            model: Model name for extraction
+            db_path: Optional path to SQLite database for persistence
+            entity_threshold: Similarity threshold (default: 0.7, lower than lexical)
+            resolve_entities: Whether to resolve entities (default True)
+            use_mock_embeddings: If True, use mock embeddings for testing
+            use_hybrid: If True, use hybrid (lexical + embedding) similarity
+            lexical_weight: Weight for lexical component when use_hybrid=True
+
+        Returns:
+            Configured ExtractionPipeline with embedding-based resolution
+
+        Example:
+            # Production (requires OPENAI_API_KEY)
+            pipeline = ExtractionPipeline.create_with_embeddings(
+                client, model="gpt-4o"
+            )
+
+            # Testing (no API calls)
+            pipeline = ExtractionPipeline.create_with_embeddings(
+                client, model="gpt-4o", use_mock_embeddings=True
+            )
+
+            # Hybrid similarity (best of both worlds)
+            pipeline = ExtractionPipeline.create_with_embeddings(
+                client, model="gpt-4o", use_hybrid=True
+            )
+        """
+        from z3adapter.ikr.triples.embeddings import (
+            MockEmbedding,
+            OpenAIEmbedding,
+            make_embedding_similarity,
+            make_hybrid_similarity,
+        )
+
+        extractor = TripleExtractor(llm_client, model=model)
+        store = TripleStore()
+        storage = SQLiteTripleStorage(db_path) if db_path else None
+
+        # Create embedding backend
+        backend = MockEmbedding() if use_mock_embeddings else OpenAIEmbedding()
+
+        # Create resolver with embedding similarity
+        if use_hybrid:
+            resolver = EntityResolver.with_hybrid_similarity(
+                backend=backend,
+                threshold=entity_threshold,
+                lexical_weight=lexical_weight,
+            )
+            sim_fn = make_hybrid_similarity(backend, lexical_weight=lexical_weight)
+        else:
+            resolver = EntityResolver.with_embeddings(
+                backend=backend,
+                threshold=entity_threshold,
+            )
+            sim_fn = make_embedding_similarity(backend)
+
+        return cls(
+            extractor=extractor,
+            resolver=resolver,
+            store=store,
+            storage=storage,
+            resolve_entities=resolve_entities,
+            auto_persist=db_path is not None,
+            sim_fn=sim_fn,
         )
 
     # =========================================================================

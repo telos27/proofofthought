@@ -5,11 +5,12 @@ forms to canonical entities using fuzzy matching.
 
 Key features:
 - Pluggable similarity function (default: combined_lexical_similarity)
+- Optional embedding-based semantic similarity
 - Configurable match threshold
 - Surface form tracking (remembers aliases)
 - Normalization (lowercase, underscores)
 
-Example:
+Example (lexical matching):
     from z3adapter.ikr.triples import EntityResolver, EntityMatch
 
     resolver = EntityResolver(threshold=0.8)
@@ -19,8 +20,24 @@ Example:
     print(match.canonical)  # "working_memory"
     print(match.similarity)  # 1.0 (exact match after normalization)
 
+Example (embedding-based matching):
+    from z3adapter.ikr.triples import EntityResolver
+    from z3adapter.ikr.triples.embeddings import OpenAIEmbedding, make_embedding_similarity
+
+    # Create embedding-based similarity function
+    backend = OpenAIEmbedding()
+    sim_fn = make_embedding_similarity(backend)
+
+    # Use with resolver
+    resolver = EntityResolver(threshold=0.7, similarity_fn=sim_fn)
+    resolver.add_entity("anxiety_disorder")
+
+    match = resolver.resolve("worry and fear")  # Semantic match!
+    print(match.canonical)  # "anxiety_disorder"
+
 References:
     - Uses similarity functions from z3adapter.ikr.fuzzy_nars
+    - Optional embeddings from z3adapter.ikr.triples.embeddings
 """
 
 from __future__ import annotations
@@ -323,3 +340,92 @@ class EntityResolver:
         while "__" in result:
             result = result.replace("__", "_")
         return result
+
+    @classmethod
+    def with_embeddings(
+        cls,
+        backend: Optional[object] = None,
+        threshold: float = 0.7,
+        use_mock: bool = False,
+    ) -> "EntityResolver":
+        """Create an EntityResolver with embedding-based similarity.
+
+        Factory method to create a resolver that uses semantic embeddings
+        for entity matching. This provides better matching for synonyms
+        and semantically related terms.
+
+        Args:
+            backend: Optional EmbeddingBackend instance. If not provided,
+                    creates OpenAIEmbedding (or MockEmbedding if use_mock=True)
+            threshold: Similarity threshold (default: 0.7, lower than lexical)
+            use_mock: If True, use MockEmbedding for testing (no API calls)
+
+        Returns:
+            EntityResolver configured with embedding similarity
+
+        Example:
+            # Production (requires OPENAI_API_KEY)
+            resolver = EntityResolver.with_embeddings()
+
+            # Testing (no API calls)
+            resolver = EntityResolver.with_embeddings(use_mock=True)
+
+            resolver.add_entity("cognitive_behavioral_therapy", ["CBT"])
+            match = resolver.resolve("talk therapy for anxiety")
+            print(match.canonical)  # Semantic match!
+        """
+        from z3adapter.ikr.triples.embeddings import (
+            MockEmbedding,
+            OpenAIEmbedding,
+            make_embedding_similarity,
+        )
+
+        if backend is None:
+            backend = MockEmbedding() if use_mock else OpenAIEmbedding()
+
+        sim_fn = make_embedding_similarity(backend)
+        return cls(threshold=threshold, _similarity_fn=sim_fn)
+
+    @classmethod
+    def with_hybrid_similarity(
+        cls,
+        backend: Optional[object] = None,
+        threshold: float = 0.75,
+        lexical_weight: float = 0.3,
+        use_mock: bool = False,
+    ) -> "EntityResolver":
+        """Create an EntityResolver with hybrid lexical+embedding similarity.
+
+        Combines lexical similarity (handles typos, underscore variants) with
+        embedding similarity (semantic understanding). Best of both worlds.
+
+        Args:
+            backend: Optional EmbeddingBackend instance
+            threshold: Similarity threshold (default: 0.75)
+            lexical_weight: Weight for lexical component (0-1), rest is embedding
+            use_mock: If True, use MockEmbedding for testing
+
+        Returns:
+            EntityResolver configured with hybrid similarity
+
+        Example:
+            resolver = EntityResolver.with_hybrid_similarity(lexical_weight=0.3)
+            resolver.add_entity("working_memory")
+
+            # Lexical component helps with typos
+            match = resolver.resolve("workng_memory")
+
+            # Embedding component helps with synonyms
+            match = resolver.resolve("short-term memory store")
+        """
+        from z3adapter.ikr.triples.embeddings import (
+            MockEmbedding,
+            OpenAIEmbedding,
+            make_hybrid_similarity,
+        )
+
+        if backend is None:
+            backend = MockEmbedding() if use_mock else OpenAIEmbedding()
+
+        sim_fn = make_hybrid_similarity(backend, lexical_weight=lexical_weight)
+        return cls(threshold=threshold, _similarity_fn=sim_fn)

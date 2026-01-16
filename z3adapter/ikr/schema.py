@@ -511,7 +511,7 @@ class IKR(BaseModel):
     # Knowledge base modules to load
     kb_modules: list[str] = Field(
         default_factory=list,
-        description="Knowledge base modules to load (e.g., ['food', 'social'])",
+        description="Knowledge base modules to load (e.g., ['commonsense'])",
     )
 
     def get_explicit_facts(self) -> list[Fact]:

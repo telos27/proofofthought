@@ -12,11 +12,11 @@ Example usage:
     modules = KnowledgeBase.available_modules()
 
     # Load a specific module
-    food_kb = KnowledgeBase.load_module("food")
+    commonsense_kb = KnowledgeBase.load_module("commonsense")
 
     # Merge KB modules into existing IKR data
     ikr_data = {...}  # Your IKR dictionary
-    merged = KnowledgeBase.merge_into_ikr(ikr_data, ["food", "social"])
+    merged = KnowledgeBase.merge_into_ikr(ikr_data, ["commonsense"])
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ class KnowledgeBase:
         """Load a knowledge base module by name.
 
         Args:
-            name: Module name (e.g., "food", "social")
+            name: Module name (e.g., "commonsense")
 
         Returns:
             Dictionary containing the module's types, relations, facts, rules

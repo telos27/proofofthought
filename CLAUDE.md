@@ -297,7 +297,7 @@ print(f"Truth: f={result.truth_value.frequency:.3f}, c={result.truth_value.confi
 
 # Load knowledge base modules
 engine = NARSDatalogEngine()
-KBLoader.load_modules(engine, ["biology", "psychology"])
+KBLoader.load_modules(engine, ["commonsense"])
 engine.load_ikr(ikr)
 result = engine.query(ikr.query)
 
@@ -380,13 +380,31 @@ store.add(meta_triple)
 # Resolve triple references
 resolved = store.resolve("t:t1")  # Returns the Triple object
 
-# Entity resolution (fuzzy matching)
+# Entity resolution (lexical fuzzy matching)
 from z3adapter.ikr.triples import EntityResolver
 
 resolver = EntityResolver(threshold=0.8)
 resolver.add_entity("working_memory", ["WM", "short-term memory"])
 match = resolver.resolve("short term memory")
 print(match.canonical)  # "working_memory"
+
+# Entity resolution (embedding-based semantic matching)
+from z3adapter.ikr.triples.embeddings import OpenAIEmbedding, MockEmbedding
+
+# For testing (no API calls)
+resolver = EntityResolver.with_embeddings(use_mock=True, threshold=0.5)
+
+# For production (requires OPENAI_API_KEY)
+resolver = EntityResolver.with_embeddings(threshold=0.7)
+
+resolver.add_entity("anxiety_disorder")
+match = resolver.resolve("worry and fear")  # Semantic match!
+
+# Hybrid similarity (lexical + embedding)
+resolver = EntityResolver.with_hybrid_similarity(
+    lexical_weight=0.3,  # 30% lexical, 70% embedding
+    threshold=0.6
+)
 
 # Verification against TripleStore
 from z3adapter.ikr.triples import verify_triple_against_store
@@ -453,12 +471,46 @@ z3adapter/ikr/triples/
 ├── schema.py           # Triple, TripleStore, Predicate
 ├── extractor.py        # LLM-based triple extraction
 ├── entity_resolver.py  # Fuzzy entity matching
+├── embeddings.py       # Embedding backends (OpenAI, Mock)
 ├── verification.py     # Fuzzy-NARS bridge
 ├── storage.py          # SQLite persistence
 └── pipeline.py         # End-to-end extraction pipeline
 ```
 
 See `.claude/sessions/2026-01-15-triple-extraction-plan.md` for design decisions.
+
+### Link-Based Architecture (Planned)
+
+The next evolution of the triple extraction pipeline uses **entity linking** instead of entity merging for large-scale commonsense reasoning.
+
+**Key Concepts:**
+- **Link, don't merge**: "tension" and "stress" remain separate entities connected by similarity links
+- **Pre-computed similarity**: Entity embeddings and similarity links computed offline
+- **Query expansion**: Queries expanded via links, inference stays symbolic (fast)
+- **Wikidata-scale**: Architecture designed for 100M+ entities
+
+**Architecture:**
+```
+Text → LLM Extract → Entity Linker → Stored Triples
+                          │
+            ┌─────────────┴─────────────┐
+            ▼                           ▼
+      Vector Index                Entity Links
+      (FAISS ANN)               (pre-computed)
+            │                           │
+            └─────────────┬─────────────┘
+                          ▼
+Query → Entity Resolution → Query Expansion → Symbolic Match → Result
+```
+
+**New Components (planned):**
+- `EntityStore`: Entities with external IDs (Wikidata QIDs)
+- `VectorIndex`: FAISS-based ANN search
+- `EntityLinker`: Multi-level resolution (exact → surface form → vector)
+- `QueryExpander`: Expand queries via similarity links
+- `PrecomputationPipeline`: Batch embedding and link computation
+
+See `.claude/sessions/2026-01-16-link-based-architecture-design.md` for full design.
 
 ### Error Handling
 - Failed generations trigger retry with error feedback

@@ -50,6 +50,17 @@ Example (pipeline):
     # Query the knowledge base
     result = pipeline.query("Does stress cause worry?")
     print(result.verdict)  # SUPPORTED (fuzzy match)
+
+Example (embedding-based entity resolution):
+    from z3adapter.ikr.triples import EntityResolver
+    from z3adapter.ikr.triples.embeddings import OpenAIEmbedding, make_embedding_similarity
+
+    # Create resolver with semantic similarity
+    resolver = EntityResolver.with_embeddings()  # Requires OPENAI_API_KEY
+    # Or for testing: resolver = EntityResolver.with_embeddings(use_mock=True)
+
+    resolver.add_entity("anxiety_disorder")
+    match = resolver.resolve("worry and fear")  # Semantic match!
 """
 
 from z3adapter.ikr.triples.schema import (
@@ -80,6 +91,16 @@ from z3adapter.ikr.triples.pipeline import (
     IngestResult,
     QueryResult,
 )
+from z3adapter.ikr.triples.embeddings import (
+    EmbeddingBackend,
+    EmbeddingCache,
+    EmbeddingResult,
+    MockEmbedding,
+    OpenAIEmbedding,
+    cosine_similarity,
+    make_embedding_similarity,
+    make_hybrid_similarity,
+)
 
 __all__ = [
     # Schema
@@ -106,4 +127,13 @@ __all__ = [
     "ExtractionPipeline",
     "IngestResult",
     "QueryResult",
+    # Embeddings
+    "EmbeddingBackend",
+    "EmbeddingCache",
+    "EmbeddingResult",
+    "MockEmbedding",
+    "OpenAIEmbedding",
+    "cosine_similarity",
+    "make_embedding_similarity",
+    "make_hybrid_similarity",
 ]

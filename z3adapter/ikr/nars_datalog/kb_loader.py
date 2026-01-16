@@ -13,7 +13,7 @@ Example usage:
     from z3adapter.ikr.nars_datalog.kb_loader import KBLoader
 
     engine = NARSDatalogEngine()
-    KBLoader.load_modules(engine, ["food", "social"])
+    KBLoader.load_modules(engine, ["commonsense"])
     # Now engine has KB facts and rules loaded
 """
 
